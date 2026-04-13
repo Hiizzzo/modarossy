@@ -1,31 +1,31 @@
-import React from "react";
+"use client";
 
-const items: React.ReactNode[] = [
-  "Envíos a todo el país",
-  <span key="mp" className="flex items-center gap-2">
-    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/mp.png"
-        alt="Mercado Pago"
-        className="h-6 w-6 object-contain"
-      />
-    </span>
-    Pagá en cuotas
-  </span>,
-  "Local en Chascomús · Juan Manuel de Rosas 720",
-  "Nueva temporada disponible",
-];
+import { useDev } from "@/lib/dev-store";
 
 export default function AnnouncementBar() {
-  const loop = [...items, ...items];
+  const isDev = useDev((s) => s.isDev);
+
+  if (isDev) {
+    return (
+      <div className="fixed inset-x-0 bottom-0 z-30 bg-tinta py-2 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-white">
+        Modo edición
+      </div>
+    );
+  }
+
+  const items = [
+    "Envíos a todo el país",
+    "Juan Manuel de Rosas 720 · Chascomús",
+  ];
+  const loop = Array.from({ length: 6 }).flatMap(() => items);
+
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 overflow-hidden border-t border-white/10 bg-tinta text-white">
-      <div className="announcement-track flex w-max gap-12 whitespace-nowrap py-2 text-[11px] font-medium uppercase tracking-[0.18em]">
+    <div className="fixed inset-x-0 bottom-0 z-30 overflow-hidden bg-celeste-500 text-white">
+      <div className="announcement-track flex w-max gap-16 whitespace-nowrap py-2 text-[11px] font-semibold uppercase tracking-[0.2em]">
         {loop.map((t, i) => (
-          <span key={i} className="flex items-center gap-12">
+          <span key={i} className="flex items-center gap-16">
             {t}
-            <span className="text-celeste-400">✦</span>
+            <span className="text-white/70">✦</span>
           </span>
         ))}
       </div>

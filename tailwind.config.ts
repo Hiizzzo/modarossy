@@ -6,16 +6,16 @@ export default {
     extend: {
       colors: {
         celeste: {
-          50: "#F2FAFF",
-          100: "#E1F3FD",
-          200: "#BEE3F8",
-          300: "#8FCFEF",
-          400: "#63B8E3",
-          500: "#4FA8D8",
-          600: "#3A8CBE",
-          700: "#2E6F97"
+          50: "#FFF0F7",
+          100: "#FFDCEC",
+          200: "#FFB8D9",
+          300: "#FF8FC1",
+          400: "#FF63A6",
+          500: "#FF3D8F",
+          600: "#E81E76",
+          700: "#B8155A"
         },
-        tinta: "#0F1B2D"
+        tinta: "#1A0A14"
       },
       fontFamily: {
         sans: ["var(--font-barlow)", "ui-sans-serif", "system-ui", "sans-serif"]

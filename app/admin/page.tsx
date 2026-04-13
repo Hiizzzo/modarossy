@@ -9,9 +9,6 @@ export default async function AdminDashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-semibold tracking-tight">Productos</h1>
-        <Link href="/admin/productos/nuevo" className="btn-primary">
-          + Nuevo
-        </Link>
       </div>
 
       <div className="overflow-hidden rounded-2xl ring-1 ring-celeste-100">

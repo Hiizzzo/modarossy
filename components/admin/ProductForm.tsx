@@ -1,84 +1,245 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import Cropper from "react-easy-crop";
 import { createClient } from "@/lib/supabase/client";
 
-type VariantDraft = {
-  size: string;
-  color: string;
-  stock: number;
-};
+const GROQ_KEY = process.env.NEXT_PUBLIC_GROQ_KEY || "";
+const CATEGORIES = ["camperas", "carteras", "zapatillas", "mochilas"];
+
+type Variant = { size: string; color: string; stock: number };
 
 export default function ProductForm() {
   const supabase = createClient();
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    name: "",
-    slug: "",
-    description: "",
-    price: 0,
-    category: "mujer",
-  });
-  const [variants, setVariants] = useState<VariantDraft[]>([
-    { size: "S", color: "", stock: 0 },
-    { size: "M", color: "", stock: 0 },
-    { size: "L", color: "", stock: 0 },
+  const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<string>("camperas");
+  const [price, setPrice] = useState<string>("");
+  const [description, setDescription] = useState("");
+  const [variants, setVariants] = useState<Variant[]>([
+    { size: "", color: "", stock: 1 },
   ]);
-  const [files, setFiles] = useState<File[]>([]);
 
-  const setField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
-    setForm((f) => ({ ...f, [key]: value }));
+  const [recording, setRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
-  const addVariant = () =>
-    setVariants((v) => [...v, { size: "", color: "", stock: 0 }]);
+  const [loading, setLoading] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  const updateVariant = (idx: number, patch: Partial<VariantDraft>) =>
-    setVariants((v) => v.map((x, i) => (i === idx ? { ...x, ...patch } : x)));
+  const [cropping, setCropping] = useState(false);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const croppedPixelsRef = useRef<{ x: number; y: number; width: number; height: number } | null>(
+    null
+  );
 
-  const removeVariant = (idx: number) =>
-    setVariants((v) => v.filter((_, i) => i !== idx));
+  const resizeImage = (file: File, max: number): Promise<File> =>
+    new Promise((res) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (b) => res(new File([b!], file.name, { type: "image/jpeg" })),
+          "image/jpeg",
+          0.9
+        );
+      };
+      img.src = URL.createObjectURL(file);
+    });
 
-  const uploadImages = async (productId: string) => {
-    const urls: string[] = [];
-    for (const f of files) {
-      const path = `${productId}/${Date.now()}-${f.name}`;
-      const { error } = await supabase.storage
-        .from("product-images")
-        .upload(path, f, { upsert: false });
-      if (error) throw error;
-      const { data } = supabase.storage.from("product-images").getPublicUrl(path);
-      urls.push(data.publicUrl);
+  const onPhoto = async (f: File | null) => {
+    if (!f) {
+      setPhoto(null);
+      setPhotoPreview(null);
+      return;
     }
-    return urls;
+    setLoading("Quitando fondo...");
+    try {
+      const resized = await resizeImage(f, 1024);
+      const { removeBackground } = await import("@imgly/background-removal");
+      const cutoutBlob = await removeBackground(resized, {
+        model: "isnet",
+        output: { format: "image/png", quality: 0.9 },
+      });
+      const finalFile = new File([cutoutBlob], f.name.replace(/\.[^.]+$/, "") + ".png", {
+        type: "image/png",
+      });
+      setPhoto(finalFile);
+      setPhotoPreview(URL.createObjectURL(finalFile));
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+      setCropping(true);
+    } catch {
+      setPhoto(f);
+      setPhotoPreview(URL.createObjectURL(f));
+      setMsg("No se pudo quitar el fondo, se usa la foto original");
+    } finally {
+      setLoading(null);
+    }
   };
 
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
+  const onCropComplete = useCallback(
+    (_: unknown, area: { x: number; y: number; width: number; height: number }) => {
+      croppedPixelsRef.current = area;
+    },
+    []
+  );
+
+  const applyCrop = async () => {
+    if (!photo || !photoPreview || !croppedPixelsRef.current) {
+      setCropping(false);
+      return;
+    }
+    const img = new Image();
+    img.src = photoPreview;
+    await new Promise((res) => (img.onload = res));
+    const { x, y, width, height } = croppedPixelsRef.current;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(img, x, y, width, height, 0, 0, width, height);
+    const blob: Blob = await new Promise((res) =>
+      canvas.toBlob((b) => res(b!), "image/png")
+    );
+    const cropped = new File([blob], photo.name, { type: "image/png" });
+    setPhoto(cropped);
+    setPhotoPreview(URL.createObjectURL(cropped));
+    setCropping(false);
+  };
+
+  const transcribe = async (blob: Blob): Promise<string> => {
+    const fd = new FormData();
+    fd.append("file", new File([blob], "audio.webm", { type: "audio/webm" }));
+    fd.append("model", "whisper-large-v3-turbo");
+    fd.append("language", "es");
+    const r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${GROQ_KEY}` },
+      body: fd,
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error?.message || "Error transcripción");
+    return j.text || "";
+  };
+
+  const extractFromText = async (transcript: string) => {
+    const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GROQ_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        messages: [
+          {
+            role: "user",
+            content: `Descripción de una prenda:\n"${transcript}"\n\nDevolvé SOLO un JSON con:\n- name: nombre corto en español\n- category: una de ${JSON.stringify(CATEGORIES)}\n- price: número en pesos (sin símbolos)\n- description: 1-2 oraciones\n- variants: array [{size, color, stock}]. Si no menciona stock usá 1. Sin talles usá [{size:"Único",color:"",stock:1}]\n\nSolo el JSON.`,
+          },
+        ],
+        max_tokens: 500,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error?.message || "Error IA");
+    const text = j.choices?.[0]?.message?.content || "";
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("No se pudo leer la IA");
+    return JSON.parse(match[0]);
+  };
+
+  const startRec = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunksRef.current = [];
+      const mr = new MediaRecorder(stream);
+      mr.ondataavailable = (e) => chunksRef.current.push(e.data);
+      mr.onstop = async () => {
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        stream.getTracks().forEach((t) => t.stop());
+        try {
+          setLoading("Transcribiendo...");
+          const transcript = await transcribe(blob);
+          setLoading("Analizando...");
+          const d = await extractFromText(transcript);
+          if (d.name) setName(d.name);
+          if (d.category && CATEGORIES.includes(d.category)) setCategory(d.category);
+          if (d.price) setPrice(String(d.price));
+          if (d.description) setDescription(d.description);
+          if (Array.isArray(d.variants) && d.variants.length) setVariants(d.variants);
+          setLoading(null);
+        } catch (e) {
+          setLoading(null);
+          setMsg(e instanceof Error ? e.message : "Error IA");
+        }
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+    } catch {
+      setMsg("No se pudo acceder al micrófono");
+    }
+  };
+
+  const stopRec = () => {
+    mediaRecorderRef.current?.stop();
+    setRecording(false);
+  };
+
+  const updateVariant = (i: number, patch: Partial<Variant>) =>
+    setVariants((vs) => vs.map((v, j) => (i === j ? { ...v, ...patch } : v)));
+  const addVariant = () =>
+    setVariants((vs) => [...vs, { size: "", color: "", stock: 1 }]);
+  const removeVariant = (i: number) =>
+    setVariants((vs) => vs.filter((_, j) => j !== i));
+
+  const save = async () => {
+    if (!photo) {
+      setMsg("Falta la foto");
+      return;
+    }
+    if (!name.trim() || !price) {
+      setMsg("Falta nombre o precio");
+      return;
+    }
+    setLoading("Guardando...");
     setMsg(null);
     try {
-      const slug =
-        form.slug || form.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-
+      const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
       const { data: product, error } = await supabase
         .from("products")
         .insert({
-          name: form.name,
-          slug,
-          description: form.description,
-          price: form.price,
-          category: form.category,
+          name,
+          slug: `${slug}-${Date.now().toString(36)}`,
+          description,
+          price: Number(price),
+          category,
           images: [],
         })
         .select("id")
         .single();
       if (error) throw error;
 
-      const urls = await uploadImages(product.id);
-      if (urls.length) {
-        await supabase.from("products").update({ images: urls }).eq("id", product.id);
-      }
+      const path = `${product.id}/${Date.now()}-${photo.name}`;
+      const { error: upErr } = await supabase.storage
+        .from("product-images")
+        .upload(path, photo, { upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("product-images").getPublicUrl(path);
+      await supabase.from("products").update({ images: [pub.publicUrl] }).eq("id", product.id);
 
       if (variants.length) {
         await supabase.from("product_variants").insert(
@@ -91,122 +252,211 @@ export default function ProductForm() {
         );
       }
 
-      setMsg("Producto creado ✓");
-      setForm({ name: "", slug: "", description: "", price: 0, category: "mujer" });
-      setVariants([{ size: "S", color: "", stock: 0 }]);
-      setFiles([]);
-    } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Error al guardar");
-    } finally {
-      setSaving(false);
+      setMsg("Producto guardado ✓");
+      setPhoto(null);
+      setPhotoPreview(null);
+      setName("");
+      setPrice("");
+      setDescription("");
+      setVariants([{ size: "", color: "", stock: 1 }]);
+      setLoading(null);
+    } catch (e) {
+      setLoading(null);
+      setMsg(e instanceof Error ? e.message : "Error al guardar");
     }
   };
 
-  const field = "h-11 w-full rounded-full border border-celeste-200 px-4 text-sm focus:border-celeste-500 focus:outline-none";
-
   return (
-    <form onSubmit={save} className="space-y-8">
-      <div className="card space-y-4 p-6">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <input
-            required
-            placeholder="Nombre"
-            className={field}
-            value={form.name}
-            onChange={(e) => setField("name", e.target.value)}
-          />
-          <input
-            placeholder="slug (opcional)"
-            className={field}
-            value={form.slug}
-            onChange={(e) => setField("slug", e.target.value)}
-          />
-          <input
-            required
-            type="number"
-            min={0}
-            placeholder="Precio"
-            className={field}
-            value={form.price || ""}
-            onChange={(e) => setField("price", Number(e.target.value))}
-          />
-          <select
-            className={field}
-            value={form.category}
-            onChange={(e) => setField("category", e.target.value)}
-          >
-            <option value="mujer">Mujer</option>
-            <option value="hombre">Hombre</option>
-            <option value="accesorios">Accesorios</option>
-          </select>
-        </div>
-        <textarea
-          placeholder="Descripción"
-          rows={3}
-          className="w-full rounded-2xl border border-celeste-200 p-4 text-sm"
-          value={form.description}
-          onChange={(e) => setField("description", e.target.value)}
+    <div className="relative mx-auto w-full max-w-sm space-y-2.5 rounded-3xl border-[3px] border-celeste-500 bg-celeste-500 p-4">
+      <div className="flex items-center gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nombre del producto"
+          className="h-10 min-w-0 flex-1 rounded-full border-0 bg-white px-4 text-sm font-semibold text-black placeholder:font-normal placeholder:text-black/40 focus:outline-none"
         />
-
-        <div>
-          <label className="mb-2 block text-sm font-medium">Imágenes</label>
-          <input
-            type="file"
-            multiple
-            accept="image/*"
-            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-            className="text-sm"
-          />
-          {files.length > 0 && (
-            <p className="mt-1 text-xs text-tinta/60">{files.length} archivos</p>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={() => router.push("/tienda")}
+          aria-label="Salir"
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-celeste-500 text-white ring-2 ring-white transition hover:bg-celeste-600 active:scale-95"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
       </div>
 
-      <div className="card space-y-3 p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Variantes y stock</h2>
-          <button type="button" onClick={addVariant} className="text-sm text-celeste-600">
-            + Agregar
-          </button>
-        </div>
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        className="flex h-32 w-full items-center justify-center rounded-2xl bg-white text-celeste-600 transition hover:bg-white/90"
+      >
+        {photoPreview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photoPreview} alt="" className="h-full object-contain" />
+        ) : (
+          <div className="flex flex-col items-center gap-1">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M3 7h3l2-3h8l2 3h3v13H3z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            <span className="text-[11px] font-semibold uppercase tracking-wider">Sacar o subir foto</span>
+          </div>
+        )}
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => onPhoto(e.target.files?.[0] ?? null)}
+      />
+
+      <button
+        type="button"
+        onClick={recording ? stopRec : startRec}
+        className={`flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[11px] font-semibold uppercase tracking-wider transition ${
+          recording
+            ? "bg-red-500 text-white"
+            : "bg-white text-celeste-600 hover:bg-white/90"
+        }`}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="9" y="3" width="6" height="12" rx="3" />
+          <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+        </svg>
+        {recording ? "Detener" : "Grabar descripción"}
+      </button>
+
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Descripción"
+        rows={2}
+        className="w-full resize-none rounded-2xl border-0 bg-white p-3 text-sm text-black placeholder:text-black/40 focus:outline-none"
+      />
+
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          type="number"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          placeholder="Precio"
+          className="h-11 w-full rounded-full border-0 bg-white px-4 text-sm text-black placeholder:text-black/40 focus:border-black focus:outline-none"
+        />
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="h-11 w-full rounded-full border-0 bg-white px-4 text-sm text-black focus:border-black focus:outline-none"
+        >
+          {CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="space-y-2">
         {variants.map((v, i) => (
-          <div key={i} className="grid grid-cols-[1fr_1fr_120px_auto] items-center gap-2">
+          <div key={i} className="flex gap-1.5">
             <input
-              placeholder="Talle"
-              className={field}
               value={v.size}
               onChange={(e) => updateVariant(i, { size: e.target.value })}
+              placeholder="Talle"
+              className="h-11 w-full min-w-0 rounded-full border-0 bg-white px-3 text-sm text-black placeholder:text-black/40 focus:border-black focus:outline-none"
             />
             <input
-              placeholder="Color"
-              className={field}
               value={v.color}
               onChange={(e) => updateVariant(i, { color: e.target.value })}
+              placeholder="Color"
+              className="h-11 w-full min-w-0 rounded-full border-0 bg-white px-3 text-sm text-black placeholder:text-black/40 focus:border-black focus:outline-none"
             />
             <input
               type="number"
-              min={0}
-              placeholder="Stock"
-              className={field}
               value={v.stock}
               onChange={(e) => updateVariant(i, { stock: Number(e.target.value) })}
+              placeholder="Stock"
+              className="h-11 w-16 rounded-full border-0 bg-white px-3 text-sm text-black placeholder:text-black/40 focus:border-black focus:outline-none"
             />
-            <button
-              type="button"
-              onClick={() => removeVariant(i)}
-              className="text-xs text-tinta/60 hover:text-red-500"
-            >
-              ✕
-            </button>
+            {i === variants.length - 1 ? (
+              <button
+                type="button"
+                onClick={addVariant}
+                className="h-11 w-11 flex-shrink-0 rounded-full bg-white text-lg text-celeste-600 hover:bg-white/90"
+              >
+                +
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => removeVariant(i)}
+                className="h-11 w-11 flex-shrink-0 text-lg text-white/70 hover:text-white"
+              >
+                ×
+              </button>
+            )}
           </div>
         ))}
       </div>
 
-      {msg && <p className="text-sm">{msg}</p>}
-      <button disabled={saving} className="btn-primary">
-        {saving ? "Guardando..." : "Guardar producto"}
+      <button
+        type="button"
+        onClick={save}
+        disabled={!!loading}
+        className="w-full rounded-full bg-white py-3.5 text-sm font-bold uppercase tracking-wider text-celeste-600 transition hover:bg-white/90 disabled:opacity-40"
+      >
+        {loading || "Guardar producto"}
       </button>
-    </form>
+
+      {msg && <p className="text-center text-xs text-white">{msg}</p>}
+
+      {cropping && photoPreview && (
+        <div className="fixed inset-0 z-[80] flex flex-col bg-black">
+          <div className="relative flex-1">
+            <Cropper
+              image={photoPreview}
+              crop={crop}
+              zoom={zoom}
+              aspect={4 / 5}
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onCropComplete={onCropComplete}
+              restrictPosition={false}
+            />
+          </div>
+          <div className="flex items-center gap-3 bg-white p-4">
+            <span className="text-xs uppercase tracking-wider text-tinta/60">Zoom</span>
+            <input
+              type="range"
+              min={0.5}
+              max={3}
+              step={0.01}
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="flex-1 accent-celeste-500"
+            />
+          </div>
+          <div className="flex gap-2 bg-white px-4 pb-4">
+            <button
+              type="button"
+              onClick={() => setCropping(false)}
+              className="flex-1 border border-tinta/20 py-3 text-xs font-bold uppercase tracking-wider"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={applyCrop}
+              className="flex-1 bg-celeste-500 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-celeste-600"
+            >
+              Listo
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

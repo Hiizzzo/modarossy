@@ -4,8 +4,7 @@ export const dynamic = "force-dynamic";
 
 export default function NuevoProductoPage() {
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Nuevo producto</h1>
+    <div className="flex min-h-[60vh] flex-col items-center justify-start px-4 pt-4">
       <ProductForm />
     </div>
   );

@@ -16,6 +16,7 @@ type DevState = {
   isDev: boolean;
   overrides: Record<string, ProductOverride>;
   enable: (password: string) => boolean;
+  forceEnable: () => void;
   disable: () => void;
   setOverride: (productId: string, patch: ProductOverride) => void;
   setVariantStock: (productId: string, variantId: string, stock: number) => void;
@@ -38,6 +39,7 @@ export const useDev = create<DevState>()(
         }
         return false;
       },
+      forceEnable: () => set({ isDev: true }),
       disable: () => set({ isDev: false }),
       setOverride: (productId, patch) =>
         set((s) => ({

@@ -39,7 +39,7 @@ export default function Footer() {
       <div className="container-edge grid gap-10 py-16 md:grid-cols-4">
         <div className="md:col-span-2">
           <div className="text-3xl font-bold uppercase tracking-tighter">
-            rossi<span className="text-celeste-500">.</span>
+            modarossy
           </div>
           <p className="mt-3 max-w-sm text-sm text-tinta/70">
             Ropa con identidad. Hecha en Argentina.
@@ -54,13 +54,23 @@ export default function Footer() {
               </Link>
             </li>
             <li>
-              <Link href="/tienda?cat=mujer" className="hover:text-celeste-600">
-                Mujer
+              <Link href="/tienda?cat=camperas" className="hover:text-celeste-600">
+                Camperas
               </Link>
             </li>
             <li>
-              <Link href="/tienda?cat=hombre" className="hover:text-celeste-600">
-                Hombre
+              <Link href="/tienda?cat=carteras" className="hover:text-celeste-600">
+                Carteras
+              </Link>
+            </li>
+            <li>
+              <Link href="/tienda?cat=zapatillas" className="hover:text-celeste-600">
+                Zapatillas
+              </Link>
+            </li>
+            <li>
+              <Link href="/tienda?cat=mochilas" className="hover:text-celeste-600">
+                Mochilas
               </Link>
             </li>
           </ul>
@@ -83,7 +93,7 @@ export default function Footer() {
       </div>
       <div className="border-t border-tinta/10">
         <div className="container-edge flex flex-col items-center justify-between gap-2 py-5 text-[11px] uppercase tracking-[0.12em] text-tinta/50 sm:flex-row">
-          <span>© {new Date().getFullYear()} Rossi Ropa</span>
+          <span>© {new Date().getFullYear()} Modarossy</span>
           <span
             onClick={secretTap}
             className="cursor-default select-none"

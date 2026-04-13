@@ -4,27 +4,44 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { useCart } from "@/lib/cart-store";
 import { useDev } from "@/lib/dev-store";
-import { megaCategories, type MegaCategory } from "@/lib/categories";
+import { categories } from "@/lib/categories";
+import { createClient } from "@/lib/supabase/client";
+
+const supabaseFullLogout = async () => {
+  try {
+    await createClient().auth.signOut();
+  } catch {}
+};
 
 export default function Navbar() {
   const count = useCart((s) => s.items.reduce((n, i) => n + i.qty, 0));
   const isDev = useDev((s) => s.isDev);
-  const enable = useDev((s) => s.enable);
+  const forceEnable = useDev((s) => s.forceEnable);
+  const disable = useDev((s) => s.disable);
+  const resetAll = useDev((s) => s.resetAll);
   const [open, setOpen] = useState(false);
-  const [hovered, setHovered] = useState<MegaCategory["key"] | null>(null);
-  const [mobileCat, setMobileCat] = useState<MegaCategory["key"] | null>(null);
+  const [gate, setGate] = useState(false);
+  const [gatePw, setGatePw] = useState("");
+  const [gateErr, setGateErr] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const tapsRef = useRef<{ count: number; t: number }>({ count: 0, t: 0 });
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const scheduleClose = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    closeTimer.current = setTimeout(() => setHovered(null), 120);
-  };
-  const cancelClose = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
+  const GATE_PASSWORD = "jaimito1842";
+
+  const submitGate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (gatePw === GATE_PASSWORD) {
+      setGate(false);
+      setGatePw("");
+      setGateErr(null);
+      setAsking(true);
+    } else {
+      setGateErr("Contraseña incorrecta");
+    }
   };
 
   const secretTap = (e: React.MouseEvent) => {
@@ -32,30 +49,34 @@ export default function Navbar() {
     if (now - tapsRef.current.t > 1500) tapsRef.current.count = 0;
     tapsRef.current.t = now;
     tapsRef.current.count += 1;
-    if (tapsRef.current.count >= 5 && !isDev) {
+    if (tapsRef.current.count >= 8 && !isDev) {
       e.preventDefault();
       tapsRef.current.count = 0;
-      setAsking(true);
+      setGate(true);
     }
   };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (enable(pw)) {
-      setAsking(false);
-      setPw("");
-      setErr(null);
-    } else {
-      setErr("Contraseña incorrecta");
+    setErr(null);
+    setLoading(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
+    setLoading(false);
+    if (error) {
+      setErr(error.message);
+      return;
     }
+    forceEnable();
+    setAsking(false);
+    setEmail("");
+    setPw("");
+    window.location.href = "/admin";
   };
 
   return (
     <header className="fixed inset-x-0 top-0 z-40">
-      <div
-        className="bg-white/90 backdrop-blur"
-        onMouseLeave={scheduleClose}
-      >
+      <div className="bg-white/90 backdrop-blur">
         <nav className="container-edge flex h-14 items-center justify-between sm:h-16">
           <Link
             href="/"
@@ -63,48 +84,30 @@ export default function Navbar() {
               setOpen(false);
               secretTap(e);
             }}
-            className="select-none text-xl font-bold uppercase tracking-tighter"
+            className={`select-none text-xl font-bold uppercase tracking-tighter transition-colors ${
+              isDev ? "text-tinta" : "text-celeste-500"
+            }`}
           >
-            rossi<span className="text-celeste-500">.</span>
+            modarossy
           </Link>
 
           <div className="hidden items-center gap-10 md:flex">
-            {megaCategories.map((c) => (
-              <div
-                key={c.key}
-                onMouseEnter={() => {
-                  cancelClose();
-                  setHovered(c.key);
-                }}
-                className="relative"
+            {categories.map((c) => (
+              <Link
+                key={c.slug}
+                href={`/tienda?cat=${c.slug}`}
+                className="text-[11px] font-semibold uppercase tracking-[0.14em] text-tinta/80 transition hover:text-celeste-600"
               >
-                <Link
-                  href={`/tienda?cat=${c.key}`}
-                  className={`text-[11px] font-semibold uppercase tracking-[0.14em] transition ${
-                    hovered === c.key ? "text-celeste-600" : "text-tinta/80"
-                  }`}
-                >
-                  {c.label}
-                </Link>
-              </div>
+                {c.label}
+              </Link>
             ))}
-            <Link
-              href="/tienda?cat=novedades"
-              onMouseEnter={() => {
-                cancelClose();
-                setHovered(null);
-              }}
-              className="text-[11px] font-semibold uppercase tracking-[0.14em] text-tinta/80 transition hover:text-celeste-600"
-            >
-              Novedades
-            </Link>
           </div>
 
           <div className="flex items-center gap-3">
             <Link
               href="/carrito"
               aria-label="Carrito"
-              className="relative flex h-9 w-9 items-center justify-center text-tinta hover:text-celeste-600"
+              className="group relative flex h-9 w-9 items-center justify-center text-tinta transition-all duration-300 hover:text-celeste-500 active:scale-90 active:text-celeste-500"
             >
               <svg
                 width="22"
@@ -129,16 +132,18 @@ export default function Navbar() {
             <button
               aria-label="Menú"
               onClick={() => setOpen((v) => !v)}
-              className="flex h-9 w-9 items-center justify-center border border-tinta/15 md:hidden"
+              className={`flex h-9 w-9 items-center justify-center transition-all duration-300 active:scale-90 md:hidden ${
+                open ? "text-celeste-500" : "text-tinta hover:text-celeste-500"
+              }`}
             >
               <span className="relative block h-3 w-4">
                 <span
-                  className={`absolute left-0 top-0 h-[2px] w-4 bg-tinta transition ${
+                  className={`absolute left-0 top-0 h-[2px] w-4 bg-current transition ${
                     open ? "translate-y-[5px] rotate-45" : ""
                   }`}
                 />
                 <span
-                  className={`absolute bottom-0 left-0 h-[2px] w-4 bg-tinta transition ${
+                  className={`absolute bottom-0 left-0 h-[2px] w-4 bg-current transition ${
                     open ? "-translate-y-[5px] -rotate-45" : ""
                   }`}
                 />
@@ -147,57 +152,6 @@ export default function Navbar() {
           </div>
         </nav>
 
-        {/* Desktop mega menu */}
-        <div
-          onMouseEnter={cancelClose}
-          onMouseLeave={scheduleClose}
-          className={`absolute inset-x-0 top-full hidden overflow-hidden bg-white/95 backdrop-blur transition-all duration-[450ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:block ${
-            hovered
-              ? "max-h-[500px] opacity-100"
-              : "pointer-events-none max-h-0 opacity-0"
-          }`}
-        >
-          {megaCategories.map((c) => (
-            <div
-              key={c.key}
-              className={`container-edge grid grid-cols-4 gap-10 py-10 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                hovered === c.key
-                  ? "translate-y-0 opacity-100"
-                  : "pointer-events-none absolute inset-x-0 -translate-y-3 opacity-0"
-              }`}
-            >
-              {c.groups.map((g, i) => (
-                <div
-                  key={g.title}
-                  className={`transition-all duration-500 ${
-                    hovered === c.key
-                      ? "translate-y-0 opacity-100"
-                      : "translate-y-2 opacity-0"
-                  }`}
-                  style={{ transitionDelay: hovered === c.key ? `${i * 60}ms` : "0ms" }}
-                >
-                  <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-tinta/50">
-                    {g.title}
-                  </p>
-                  <ul className="space-y-2">
-                    {g.items.map((it) => (
-                      <li key={it.slug}>
-                        <Link
-                          href={`/tienda?cat=${c.key}&sub=${it.slug}`}
-                          onClick={() => setHovered(null)}
-                          className="text-sm font-medium text-tinta/85 transition hover:text-celeste-600"
-                        >
-                          {it.label}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-
         {/* Mobile menu */}
         <div
           className={`overflow-hidden bg-white transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden ${
@@ -205,92 +159,113 @@ export default function Navbar() {
           }`}
         >
           <div className="container-edge flex flex-col py-2">
-            {megaCategories.map((c) => {
-              const isOpen = mobileCat === c.key;
-              return (
-                <div key={c.key} className="border-b border-tinta/5">
-                  <button
-                    onClick={() => setMobileCat(isOpen ? null : c.key)}
-                    className="flex w-full items-center justify-between py-4 text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
-                  >
-                    {c.label}
-                    <span
-                      className={`text-xs transition-transform duration-300 ${
-                        isOpen ? "rotate-45" : ""
-                      }`}
-                    >
-                      +
-                    </span>
-                  </button>
-                  <div
-                    className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                      isOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"
-                    }`}
-                  >
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 pb-4 pl-1">
-                      {c.groups.flatMap((g) =>
-                        g.items.map((it) => (
-                          <Link
-                            key={`${g.title}-${it.slug}`}
-                            href={`/tienda?cat=${c.key}&sub=${it.slug}`}
-                            onClick={() => {
-                              setOpen(false);
-                              setMobileCat(null);
-                            }}
-                            className="py-1.5 text-sm text-tinta/70 hover:text-celeste-600"
-                          >
-                            {it.label}
-                          </Link>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            <Link
-              href="/tienda?cat=novedades"
-              onClick={() => setOpen(false)}
-              className="border-b border-tinta/5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80 last:border-b-0"
-            >
-              Novedades
-            </Link>
+            {categories.map((c) => (
+              <Link
+                key={c.slug}
+                href={`/tienda?cat=${c.slug}`}
+                onClick={() => setOpen(false)}
+                className="border-b border-tinta/5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
+              >
+                {c.label}
+              </Link>
+            ))}
+            {isDev && (
+              <div className="mt-2 flex gap-2 pb-2">
+                <button
+                  onClick={() => {
+                    if (confirm("¿Resetear cambios locales?")) resetAll();
+                  }}
+                  className="flex-1 bg-celeste-500 py-3 text-[11px] font-bold uppercase tracking-[0.14em] text-white hover:bg-celeste-600"
+                >
+                  Reiniciar
+                </button>
+                <button
+                  onClick={async () => {
+                    await supabaseFullLogout();
+                    disable();
+                    setOpen(false);
+                    window.location.href = "/";
+                  }}
+                  className="flex-1 bg-celeste-500 py-3 text-[11px] font-bold uppercase tracking-[0.14em] text-white hover:bg-celeste-600"
+                >
+                  Salir
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {asking && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setAsking(false)}
-        >
+      {gate && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
           <form
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={submit}
-            className="w-full max-w-xs space-y-3 bg-white p-6 shadow-2xl"
+            onSubmit={submitGate}
+            className="relative w-full max-w-xs space-y-3 bg-white px-5 py-4 shadow-2xl"
           >
-            <h3 className="text-sm font-bold uppercase tracking-[0.12em]">
-              Acceso restringido
+            <button
+              type="button"
+              onClick={() => setGate(false)}
+              aria-label="Cerrar"
+              className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center text-tinta hover:text-tinta/70"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+            <h3 className="text-center text-xl font-bold uppercase tracking-[0.18em]">
+              Clave
             </h3>
             <input
-              type="password"
+              type="text"
               autoFocus
+              value={gatePw}
+              onChange={(e) => setGatePw(e.target.value)}
+              className="h-10 w-full border border-tinta/20 px-3 text-sm focus:border-celeste-500 focus:outline-none"
+            />
+            {gateErr && <p className="text-xs text-red-500">{gateErr}</p>}
+            <button className="btn-primary w-full !py-2">Continuar</button>
+          </form>
+        </div>
+      )}
+
+      {asking && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
+          <form
+            onSubmit={submit}
+            className="relative w-full max-w-xs space-y-3 bg-white px-5 py-4 shadow-2xl"
+          >
+            <button
+              type="button"
+              onClick={() => setAsking(false)}
+              aria-label="Cerrar"
+              className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center text-tinta hover:text-tinta/70"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+            <h3 className="text-center text-xl font-bold uppercase tracking-[0.18em]">
+              Panel
+            </h3>
+            <input
+              type="email"
+              autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              className="h-10 w-full border border-tinta/20 px-3 text-sm focus:border-celeste-500 focus:outline-none"
+            />
+            <input
+              type="password"
               value={pw}
               onChange={(e) => setPw(e.target.value)}
               placeholder="Contraseña"
-              className="h-11 w-full border border-tinta/20 px-4 text-sm focus:border-celeste-500 focus:outline-none"
+              className="h-10 w-full border border-tinta/20 px-3 text-sm focus:border-celeste-500 focus:outline-none"
             />
             {err && <p className="text-xs text-red-500">{err}</p>}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setAsking(false)}
-                className="btn-ghost flex-1 !py-2"
-              >
-                Cancelar
-              </button>
-              <button className="btn-primary flex-1 !py-2">Entrar</button>
-            </div>
+            <button disabled={loading} className="btn-primary w-full !py-2">
+              {loading ? "..." : "Entrar"}
+            </button>
           </form>
         </div>
       )}

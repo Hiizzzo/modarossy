@@ -13,14 +13,14 @@ const barlow = Barlow({
 
 export const metadata: Metadata = {
   title: "modarossy",
-  description: "Tienda de ropa Rossi. Juan Manuel de Rosas 720, Chascomús.",
+  description: "Modarossy. Juan Manuel de Rosas 720, Chascomús.",
 };
 
 export const viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
-  themeColor: "#4FA8D8",
+  themeColor: "#F55A96",
 };
 
 export default function RootLayout({

@@ -1,10 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useDev } from "@/lib/dev-store";
+import { createClient } from "@/lib/supabase/client";
 
 export default function DevModeToggle() {
-  const { isDev, enable, disable, resetAll } = useDev();
+  const { isDev, enable, disable, resetAll, forceEnable } = useDev();
+  const pathname = usePathname();
+  const onNuevo = pathname === "/admin/productos/nuevo";
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) forceEnable();
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session) forceEnable();
+      else disable();
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [forceEnable, disable]);
+
+  const fullExit = async () => {
+    try {
+      await createClient().auth.signOut();
+    } catch {}
+    disable();
+    window.location.href = "/";
+  };
   const [asking, setAsking] = useState(false);
   const [pw, setPw] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -37,25 +61,16 @@ export default function DevModeToggle() {
 
   return (
     <>
-      {isDev && (
-        <div className="fixed bottom-14 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-3 bg-tinta px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white shadow-lg ring-1 ring-white/20">
-          <span className="flex h-2 w-2 animate-pulse rounded-full bg-celeste-400" />
-          Modo edición
-          <button
-            onClick={() => {
-              if (confirm("¿Resetear todos los cambios locales?")) resetAll();
-            }}
-            className="border-l border-white/20 pl-3 hover:text-celeste-300"
-          >
-            Reset
-          </button>
-          <button
-            onClick={disable}
-            className="border-l border-white/20 pl-3 hover:text-celeste-300"
-          >
-            Salir
-          </button>
-        </div>
+      {isDev && !onNuevo && (
+        <a
+          href="/admin/productos/nuevo"
+          className="fixed bottom-12 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 bg-celeste-500 px-4 py-2 text-[9px] font-bold uppercase tracking-[0.14em] text-white shadow-xl transition hover:bg-celeste-600 active:scale-95"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Agregar producto
+        </a>
       )}
 
       {asking && (
