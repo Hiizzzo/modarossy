@@ -68,7 +68,9 @@ export default function ProductForm() {
     setLoading("Quitando fondo...");
     try {
       const resized = await resizeImage(f, 1024);
-      const { removeBackground } = await import("@imgly/background-removal");
+      const url = "https://esm.sh/@imgly/background-removal@1.7.0";
+      const mod = await import(/* webpackIgnore: true */ /* @vite-ignore */ url);
+      const removeBackground = (mod as { removeBackground: (input: Blob, cfg?: unknown) => Promise<Blob> }).removeBackground;
       const cutoutBlob = await removeBackground(resized, {
         model: "isnet",
         output: { format: "image/png", quality: 0.9 },
