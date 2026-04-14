@@ -63,31 +63,12 @@ export default function ProductForm() {
       setPhotoPreview(null);
       return;
     }
-    setLoading("Quitando fondo...");
-    try {
-      const resized = await resizeImage(f, 1024);
-      const url = "https://esm.sh/@imgly/background-removal@1.7.0";
-      const mod = await import(/* webpackIgnore: true */ /* @vite-ignore */ url);
-      const removeBackground = (mod as { removeBackground: (input: Blob, cfg?: unknown) => Promise<Blob> }).removeBackground;
-      const cutoutBlob = await removeBackground(resized, {
-        model: "isnet",
-        output: { format: "image/png", quality: 0.9 },
-      });
-      const finalFile = new File([cutoutBlob], f.name.replace(/\.[^.]+$/, "") + ".png", {
-        type: "image/png",
-      });
-      setPhoto(finalFile);
-      setPhotoPreview(URL.createObjectURL(finalFile));
-      setCrop({ x: 0, y: 0 });
-      setZoom(1);
-      setCropping(true);
-    } catch {
-      setPhoto(f);
-      setPhotoPreview(URL.createObjectURL(f));
-      setMsg("No se pudo quitar el fondo, se usa la foto original");
-    } finally {
-      setLoading(null);
-    }
+    const resized = await resizeImage(f, 1024);
+    setPhoto(resized);
+    setPhotoPreview(URL.createObjectURL(resized));
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCropping(true);
   };
 
   const onCropComplete = useCallback(
