@@ -160,16 +160,27 @@ export default function Navbar() {
           }`}
         >
           <div className="container-edge flex flex-col py-2">
-            {categories.map((c) => (
+            {categories
+              .filter((c) => c.slug)
+              .map((c) => (
+                <Link
+                  key={c.slug}
+                  href={`/tienda?cat=${c.slug}`}
+                  onClick={() => setOpen(false)}
+                  className="border-b border-tinta/5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
+                >
+                  {c.label}
+                </Link>
+              ))}
+            {isDev && (
               <Link
-                key={c.slug || "all"}
-                href={c.slug ? `/tienda?cat=${c.slug}` : "/tienda"}
+                href="/admin/ventas"
                 onClick={() => setOpen(false)}
-                className="border-b border-tinta/5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
+                className="border-b border-tinta/5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-celeste-600"
               >
-                {c.label}
+                Ventas
               </Link>
-            ))}
+            )}
             {isDev && (
               <div className="mt-2 flex gap-2 pb-2">
                 <button

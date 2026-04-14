@@ -10,7 +10,7 @@ export default function AnnouncementBar() {
 
   if (isDev) {
     return (
-      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-center bg-celeste-500 py-3 text-white">
+      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-center bg-celeste-500 py-2 text-white">
         {!onNuevo && (
           <a
             href="/admin/productos/nuevo"
@@ -42,7 +42,7 @@ export default function AnnouncementBar() {
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 overflow-hidden bg-celeste-500 text-white">
-      <div className="announcement-track flex w-max gap-16 whitespace-nowrap py-3 text-lg font-bold uppercase tracking-[0.2em]">
+      <div className="announcement-track flex w-max gap-16 whitespace-nowrap py-2 text-lg font-bold uppercase tracking-[0.2em]">
         {loop.map((t, i) => (
           <span key={i} className="flex items-center gap-16">
             {t}

@@ -2,59 +2,54 @@ import Link from "next/link";
 import { getAllProducts } from "@/lib/products";
 import { formatARS } from "@/lib/format";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminDashboard() {
   const products = await getAllProducts();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 px-3 pb-20 pt-4 sm:px-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-semibold tracking-tight">Productos</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Productos</h1>
+        <Link
+          href="/admin/ventas"
+          className="rounded-full bg-celeste-500 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-white"
+        >
+          Ventas
+        </Link>
       </div>
 
-      <div className="overflow-hidden rounded-2xl ring-1 ring-celeste-100">
-        <table className="w-full text-sm">
-          <thead className="bg-celeste-50 text-left text-xs uppercase tracking-wider text-tinta/60">
-            <tr>
-              <th className="px-4 py-3">Producto</th>
-              <th className="px-4 py-3">Categoría</th>
-              <th className="px-4 py-3">Precio</th>
-              <th className="px-4 py-3">Stock total</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-celeste-100">
-            {products.map((p) => {
-              const totalStock = p.variants.reduce((s, v) => s + v.stock, 0);
-              return (
-                <tr key={p.id}>
-                  <td className="px-4 py-3 font-medium">{p.name}</td>
-                  <td className="px-4 py-3 text-tinta/70">{p.category}</td>
-                  <td className="px-4 py-3">{formatARS(p.price)}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        totalStock > 0
-                          ? "bg-celeste-100 text-celeste-700"
-                          : "bg-red-100 text-red-600"
-                      }`}
-                    >
-                      {totalStock}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/admin/productos/${p.id}`}
-                      className="text-celeste-600 hover:underline"
-                    >
-                      Editar
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <ul className="divide-y divide-celeste-100 overflow-hidden rounded-2xl ring-1 ring-celeste-100">
+        {products.map((p) => {
+          const totalStock = p.variants.reduce((s, v) => s + v.stock, 0);
+          return (
+            <li key={p.id} className="flex items-center gap-3 bg-white px-3 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{p.name}</p>
+                <p className="truncate text-[11px] uppercase tracking-wide text-tinta/50">
+                  {p.category}
+                </p>
+                <p className="mt-0.5 text-sm font-bold">{formatARS(p.price)}</p>
+              </div>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  totalStock > 0
+                    ? "bg-celeste-100 text-celeste-700"
+                    : "bg-red-100 text-red-600"
+                }`}
+              >
+                {totalStock}
+              </span>
+              <Link
+                href={`/admin/productos/${p.id}`}
+                className="rounded-full bg-tinta px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-white"
+              >
+                Editar
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
