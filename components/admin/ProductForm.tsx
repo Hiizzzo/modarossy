@@ -3,7 +3,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Cropper from "react-easy-crop";
-import { createClient } from "@/lib/supabase/client";
 
 const GROQ_KEY = process.env.NEXT_PUBLIC_GROQ_KEY || "";
 const CATEGORIES = ["camperas", "carteras", "zapatillas", "mochilas"];
@@ -11,7 +10,6 @@ const CATEGORIES = ["camperas", "carteras", "zapatillas", "mochilas"];
 type Variant = { size: string; color: string; stock: number };
 
 export default function ProductForm() {
-  const supabase = createClient();
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<File | null>(null);
@@ -221,38 +219,17 @@ export default function ProductForm() {
     setMsg(null);
     try {
       const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-      const { data: product, error } = await supabase
-        .from("products")
-        .insert({
-          name,
-          slug: `${slug}-${Date.now().toString(36)}`,
-          description,
-          price: Number(price),
-          category,
-          images: [],
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-
-      const path = `${product.id}/${Date.now()}-${photo.name}`;
-      const { error: upErr } = await supabase.storage
-        .from("product-images")
-        .upload(path, photo, { upsert: false });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("product-images").getPublicUrl(path);
-      await supabase.from("products").update({ images: [pub.publicUrl] }).eq("id", product.id);
-
-      if (variants.length) {
-        await supabase.from("product_variants").insert(
-          variants.map((v) => ({
-            product_id: product.id,
-            size: v.size || null,
-            color: v.color || null,
-            stock: v.stock,
-          }))
-        );
-      }
+      const fd = new FormData();
+      fd.append("name", name);
+      fd.append("slug", `${slug}-${Date.now().toString(36)}`);
+      fd.append("description", description);
+      fd.append("price", String(Number(price)));
+      fd.append("category", category);
+      fd.append("variants", JSON.stringify(variants));
+      fd.append("photo", photo);
+      const r = await fetch("/api/products", { method: "POST", body: fd });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Error al guardar");
 
       setMsg("Producto guardado ✓");
       setPhoto(null);
@@ -269,19 +246,19 @@ export default function ProductForm() {
   };
 
   return (
-    <div className="relative mx-auto w-full max-w-sm space-y-2.5 rounded-3xl border-[3px] border-celeste-500 bg-celeste-500 p-4">
+    <div className="relative mx-auto w-full max-w-sm space-y-2.5 rounded-3xl bg-white p-4 shadow-2xl">
       <div className="flex items-center gap-2">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Nombre del producto"
-          className="h-10 min-w-0 flex-1 rounded-full border-0 bg-white px-4 text-sm font-semibold text-black placeholder:font-normal placeholder:text-black/40 focus:outline-none"
+          className="h-10 min-w-0 flex-1 rounded-full border border-tinta/25 bg-white px-4 text-sm font-semibold text-tinta placeholder:font-normal placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
         />
         <button
           type="button"
           onClick={() => router.push("/tienda")}
           aria-label="Salir"
-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-celeste-500 text-white ring-2 ring-white transition hover:bg-celeste-600 active:scale-95"
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white text-tinta transition hover:bg-tinta/5 active:scale-95"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
             <path d="M6 6l12 12M18 6L6 18" />
@@ -292,7 +269,7 @@ export default function ProductForm() {
       <button
         type="button"
         onClick={() => fileRef.current?.click()}
-        className="flex h-32 w-full items-center justify-center rounded-2xl bg-white text-celeste-600 transition hover:bg-white/90"
+        className="flex h-32 w-full items-center justify-center rounded-2xl border border-tinta/25 bg-white text-tinta transition hover:bg-celeste-50"
       >
         {photoPreview ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -316,28 +293,12 @@ export default function ProductForm() {
         onChange={(e) => onPhoto(e.target.files?.[0] ?? null)}
       />
 
-      <button
-        type="button"
-        onClick={recording ? stopRec : startRec}
-        className={`flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[11px] font-semibold uppercase tracking-wider transition ${
-          recording
-            ? "bg-red-500 text-white"
-            : "bg-white text-celeste-600 hover:bg-white/90"
-        }`}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="9" y="3" width="6" height="12" rx="3" />
-          <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
-        </svg>
-        {recording ? "Detener" : "Grabar descripción"}
-      </button>
-
       <textarea
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         placeholder="Descripción"
         rows={2}
-        className="w-full resize-none rounded-2xl border-0 bg-white p-3 text-sm text-black placeholder:text-black/40 focus:outline-none"
+        className="w-full resize-none rounded-2xl border border-tinta/25 bg-white p-3 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
       />
 
       <div className="grid grid-cols-2 gap-2">
@@ -346,12 +307,12 @@ export default function ProductForm() {
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           placeholder="Precio"
-          className="h-11 w-full rounded-full border-0 bg-white px-4 text-sm text-black placeholder:text-black/40 focus:border-black focus:outline-none"
+          className="h-11 w-full rounded-full border border-tinta/25 bg-white px-4 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
         />
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="h-11 w-full rounded-full border-0 bg-white px-4 text-sm text-black focus:border-black focus:outline-none"
+          className="h-11 w-full rounded-full border border-tinta/25 bg-white px-4 text-sm text-tinta focus:border-celeste-500 focus:outline-none"
         >
           {CATEGORIES.map((c) => (
             <option key={c} value={c}>
@@ -368,26 +329,20 @@ export default function ProductForm() {
               value={v.size}
               onChange={(e) => updateVariant(i, { size: e.target.value })}
               placeholder="Talle"
-              className="h-11 w-full min-w-0 rounded-full border-0 bg-white px-3 text-sm text-black placeholder:text-black/40 focus:border-black focus:outline-none"
-            />
-            <input
-              value={v.color}
-              onChange={(e) => updateVariant(i, { color: e.target.value })}
-              placeholder="Color"
-              className="h-11 w-full min-w-0 rounded-full border-0 bg-white px-3 text-sm text-black placeholder:text-black/40 focus:border-black focus:outline-none"
+              className="h-11 w-full min-w-0 rounded-full border border-tinta/25 bg-white px-3 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
             />
             <input
               type="number"
               value={v.stock}
               onChange={(e) => updateVariant(i, { stock: Number(e.target.value) })}
               placeholder="Stock"
-              className="h-11 w-16 rounded-full border-0 bg-white px-3 text-sm text-black placeholder:text-black/40 focus:border-black focus:outline-none"
+              className="h-11 w-16 rounded-full border border-tinta/25 bg-white px-3 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
             />
             {i === variants.length - 1 ? (
               <button
                 type="button"
                 onClick={addVariant}
-                className="h-11 w-11 flex-shrink-0 rounded-full bg-white text-lg text-celeste-600 hover:bg-white/90"
+                className="h-11 w-11 flex-shrink-0 rounded-full bg-tinta text-lg text-white hover:bg-tinta/80"
               >
                 +
               </button>
@@ -395,7 +350,7 @@ export default function ProductForm() {
               <button
                 type="button"
                 onClick={() => removeVariant(i)}
-                className="h-11 w-11 flex-shrink-0 text-lg text-white/70 hover:text-white"
+                className="h-11 w-11 flex-shrink-0 text-lg text-tinta/40 hover:text-tinta"
               >
                 ×
               </button>
@@ -408,12 +363,12 @@ export default function ProductForm() {
         type="button"
         onClick={save}
         disabled={!!loading}
-        className="w-full rounded-full bg-white py-3.5 text-sm font-bold uppercase tracking-wider text-celeste-600 transition hover:bg-white/90 disabled:opacity-40"
+        className="w-full rounded-full bg-tinta py-3.5 text-sm font-bold uppercase tracking-wider text-white transition hover:bg-tinta/80 disabled:opacity-40"
       >
         {loading || "Guardar producto"}
       </button>
 
-      {msg && <p className="text-center text-xs text-white">{msg}</p>}
+      {msg && <p className="text-center text-xs text-tinta/70">{msg}</p>}
 
       {cropping && photoPreview && (
         <div className="fixed inset-0 z-[80] flex flex-col bg-black">

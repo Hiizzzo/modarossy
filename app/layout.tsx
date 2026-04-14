@@ -4,6 +4,8 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import DevModeToggle from "@/components/DevModeToggle";
 import AnnouncementBar from "@/components/AnnouncementBar";
+import PageAnimator from "@/components/PageAnimator";
+import CartDrawer from "@/components/CartDrawer";
 
 const barlow = Barlow({
   subsets: ["latin"],
@@ -19,7 +21,8 @@ export const metadata: Metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 5,
+  maximumScale: 1,
+  userScalable: false,
   themeColor: "#F55A96",
 };
 
@@ -32,10 +35,11 @@ export default function RootLayout({
     <html lang="es" className={barlow.variable}>
       <body className="min-h-screen bg-white font-sans text-tinta antialiased">
         <Navbar />
-        <main className="pb-10 pt-14 sm:pt-16">
-          {children}
+        <main className="pb-0 pt-12 sm:pt-16">
+          <PageAnimator>{children}</PageAnimator>
         </main>
         <AnnouncementBar />
+        <CartDrawer />
         <DevModeToggle />
       </body>
     </html>

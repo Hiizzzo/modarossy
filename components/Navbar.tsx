@@ -15,6 +15,7 @@ const supabaseFullLogout = async () => {
 
 export default function Navbar() {
   const count = useCart((s) => s.items.reduce((n, i) => n + i.qty, 0));
+  const openCart = useCart((s) => s.setOpen);
   const isDev = useDev((s) => s.isDev);
   const forceEnable = useDev((s) => s.forceEnable);
   const disable = useDev((s) => s.disable);
@@ -84,9 +85,7 @@ export default function Navbar() {
               setOpen(false);
               secretTap(e);
             }}
-            className={`select-none text-xl font-bold uppercase tracking-tighter transition-colors ${
-              isDev ? "text-tinta" : "text-celeste-500"
-            }`}
+            className="select-none text-xl font-bold uppercase tracking-tighter text-celeste-500 transition-colors"
           >
             modarossy
           </Link>
@@ -94,8 +93,8 @@ export default function Navbar() {
           <div className="hidden items-center gap-10 md:flex">
             {categories.map((c) => (
               <Link
-                key={c.slug}
-                href={`/tienda?cat=${c.slug}`}
+                key={c.slug || "all"}
+                href={c.slug ? `/tienda?cat=${c.slug}` : "/tienda"}
                 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-tinta/80 transition hover:text-celeste-600"
               >
                 {c.label}
@@ -104,9 +103,11 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link
-              href="/carrito"
+            <button
+              type="button"
+              onClick={() => openCart(true)}
               aria-label="Carrito"
+              data-cart-target
               className="group relative flex h-9 w-9 items-center justify-center text-tinta transition-all duration-300 hover:text-celeste-500 active:scale-90 active:text-celeste-500"
             >
               <svg
@@ -128,7 +129,7 @@ export default function Navbar() {
                   {count}
                 </span>
               )}
-            </Link>
+            </button>
             <button
               aria-label="Menú"
               onClick={() => setOpen((v) => !v)}
@@ -161,8 +162,8 @@ export default function Navbar() {
           <div className="container-edge flex flex-col py-2">
             {categories.map((c) => (
               <Link
-                key={c.slug}
-                href={`/tienda?cat=${c.slug}`}
+                key={c.slug || "all"}
+                href={c.slug ? `/tienda?cat=${c.slug}` : "/tienda"}
                 onClick={() => setOpen(false)}
                 className="border-b border-tinta/5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
               >
@@ -172,8 +173,13 @@ export default function Navbar() {
             {isDev && (
               <div className="mt-2 flex gap-2 pb-2">
                 <button
-                  onClick={() => {
-                    if (confirm("¿Resetear cambios locales?")) resetAll();
+                  onClick={async () => {
+                    if (!confirm("¿Reiniciar todo? (restaura productos eliminados y descarta cambios locales)")) return;
+                    try {
+                      await fetch("/api/products/restore", { method: "POST" });
+                    } catch {}
+                    resetAll();
+                    window.location.reload();
                   }}
                   className="flex-1 bg-celeste-500 py-3 text-[11px] font-bold uppercase tracking-[0.14em] text-white hover:bg-celeste-600"
                 >

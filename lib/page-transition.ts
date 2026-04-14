@@ -8,15 +8,7 @@ export function usePageTransition() {
 
   return useCallback(
     (href: string) => {
-      const main = document.querySelector("main");
-      if (!main) {
-        router.push(href);
-        return;
-      }
-      main.classList.add("page-leaving");
-      window.setTimeout(() => {
-        router.push(href);
-      }, 360);
+      router.push(href);
     },
     [router]
   );

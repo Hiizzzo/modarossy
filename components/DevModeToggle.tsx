@@ -1,14 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 import { useDev } from "@/lib/dev-store";
 import { createClient } from "@/lib/supabase/client";
 
 export default function DevModeToggle() {
-  const { isDev, enable, disable, resetAll, forceEnable } = useDev();
-  const pathname = usePathname();
-  const onNuevo = pathname === "/admin/productos/nuevo";
+  const { isDev, enable, disable, forceEnable } = useDev();
 
   useEffect(() => {
     const supabase = createClient();
@@ -61,17 +58,6 @@ export default function DevModeToggle() {
 
   return (
     <>
-      {isDev && !onNuevo && (
-        <a
-          href="/admin/productos/nuevo"
-          className="fixed bottom-12 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 bg-celeste-500 px-4 py-2 text-[9px] font-bold uppercase tracking-[0.14em] text-white shadow-xl transition hover:bg-celeste-600 active:scale-95"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Agregar producto
-        </a>
-      )}
 
       {asking && (
         <div

@@ -1,14 +1,35 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useDev } from "@/lib/dev-store";
 
 export default function AnnouncementBar() {
   const isDev = useDev((s) => s.isDev);
+  const pathname = usePathname();
+  const onNuevo = pathname === "/admin/productos/nuevo";
 
   if (isDev) {
     return (
-      <div className="fixed inset-x-0 bottom-0 z-30 bg-tinta py-2 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-white">
-        Modo edición
+      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-center bg-celeste-500 py-2 text-white">
+        {!onNuevo && (
+          <a
+            href="/admin/productos/nuevo"
+            aria-label="Agregar producto"
+            className="flex items-center gap-2 text-white transition active:scale-95"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            <span className="text-[11px] font-bold uppercase tracking-[0.2em]">
+              Agregar producto
+            </span>
+          </a>
+        )}
+        {onNuevo && (
+          <span className="text-[11px] font-bold uppercase tracking-[0.2em]">
+            Modo edición
+          </span>
+        )}
       </div>
     );
   }

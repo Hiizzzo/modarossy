@@ -5,11 +5,12 @@ import { persist } from "zustand/middleware";
 
 export type ProductOverride = {
   name?: string;
+  description?: string;
   price?: number;
   image?: string;
   order?: number;
   hidden?: boolean;
-  variants?: Record<string, { stock?: number }>;
+  variants?: Record<string, { stock?: number; size?: string; color?: string }>;
 };
 
 type DevState = {
@@ -20,6 +21,11 @@ type DevState = {
   disable: () => void;
   setOverride: (productId: string, patch: ProductOverride) => void;
   setVariantStock: (productId: string, variantId: string, stock: number) => void;
+  setVariantPatch: (
+    productId: string,
+    variantId: string,
+    patch: { stock?: number; size?: string; color?: string }
+  ) => void;
   moveUp: (productId: string, allIds: string[]) => void;
   moveDown: (productId: string, allIds: string[]) => void;
   resetAll: () => void;
@@ -58,7 +64,23 @@ export const useDev = create<DevState>()(
                 ...current,
                 variants: {
                   ...current.variants,
-                  [variantId]: { stock },
+                  [variantId]: { ...current.variants?.[variantId], stock },
+                },
+              },
+            },
+          };
+        }),
+      setVariantPatch: (productId, variantId, patch) =>
+        set((s) => {
+          const current = s.overrides[productId] ?? {};
+          return {
+            overrides: {
+              ...s.overrides,
+              [productId]: {
+                ...current,
+                variants: {
+                  ...current.variants,
+                  [variantId]: { ...current.variants?.[variantId], ...patch },
                 },
               },
             },
@@ -110,7 +132,11 @@ export function applyOverrides<
     images: string[];
     variants: { id: string; stock: number; size: string | null; color: string | null }[];
   }
->(products: T[], overrides: Record<string, ProductOverride>): T[] {
+>(
+  products: T[],
+  overrides: Record<string, ProductOverride>,
+  showHidden = false
+): (T & { __hidden: boolean })[] {
   const mapped = products
     .map((p) => {
       const o = overrides[p.id];
@@ -118,18 +144,21 @@ export function applyOverrides<
       return {
         ...p,
         name: o.name ?? p.name,
+        description: o.description ?? (p as { description?: string | null }).description ?? null,
         price: o.price ?? p.price,
         images: o.image ? [o.image, ...p.images.slice(1)] : p.images,
         variants: p.variants.map((v) => ({
           ...v,
           stock: o.variants?.[v.id]?.stock ?? v.stock,
+          size: o.variants?.[v.id]?.size ?? v.size,
+          color: o.variants?.[v.id]?.color ?? v.color,
         })),
         __order: o.order ?? products.indexOf(p),
         __hidden: o.hidden ?? false,
       };
     })
-    .filter((p) => !p.__hidden)
+    .filter((p) => showHidden || !p.__hidden)
     .sort((a, b) => a.__order - b.__order)
-    .map(({ __order, __hidden, ...rest }) => rest as T);
+    .map(({ __order, ...rest }) => rest as T & { __hidden: boolean });
   return mapped;
 }

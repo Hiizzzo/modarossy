@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/server";
 
 export type Variant = {
@@ -27,6 +28,7 @@ function hasSupabase() {
 }
 
 export async function getFeaturedProducts(): Promise<Product[]> {
+  noStore();
   if (!hasSupabase()) return [];
   const supabase = createServiceClient();
   const { data } = await supabase
@@ -38,18 +40,21 @@ export async function getFeaturedProducts(): Promise<Product[]> {
 }
 
 export async function getAllProducts(category?: string): Promise<Product[]> {
+  noStore();
   if (!hasSupabase()) return [];
   const supabase = createServiceClient();
-  let query = supabase
+  const base = supabase
     .from("products")
     .select("*, variants:product_variants(*)")
     .eq("active", true);
-  if (category) query = query.eq("category", category);
-  const { data } = await query;
+  const query = category ? base.eq("category", category) : base;
+  const { data, error } = await query;
+  if (error) console.error("getAllProducts", error);
   return (data as Product[] | null) ?? [];
 }
 
 export async function getProductBySlug(slug: string): Promise<Product | null> {
+  noStore();
   if (!hasSupabase()) return null;
   const supabase = createServiceClient();
   const { data } = await supabase

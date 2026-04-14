@@ -17,14 +17,10 @@ export default function CartView() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<"cart" | "shipping">("cart");
 
   const canCheckout =
-    items.length > 0 &&
-    form.name &&
-    form.email &&
-    form.address &&
-    form.city &&
-    form.zip;
+    form.name && form.email && form.address && form.city && form.zip;
 
   const onPay = async () => {
     setLoading(true);
@@ -72,98 +68,140 @@ export default function CartView() {
     );
   }
 
+  if (step === "shipping") {
+    return (
+      <div className="mx-auto w-full max-w-sm space-y-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setStep("cart")}
+            aria-label="Volver"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-tinta hover:bg-tinta/5"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+          </button>
+          <h1 className="text-xl font-bold tracking-tight">Datos de envío</h1>
+        </div>
+
+        <div className="grid grid-cols-2 gap-1.5 pt-1">
+          {(
+            [
+              ["name", "Nombre y apellido", "col-span-2"],
+              ["email", "Email", "col-span-2"],
+              ["phone", "Teléfono", ""],
+              ["zip", "Código postal", ""],
+              ["address", "Dirección", "col-span-2"],
+              ["city", "Ciudad", "col-span-2"],
+            ] as const
+          ).map(([key, label, span]) => (
+            <input
+              key={key}
+              placeholder={label}
+              value={form[key]}
+              onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+              className={`h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none ${span}`}
+            />
+          ))}
+        </div>
+
+        {error && <p className="text-center text-xs text-red-500">{error}</p>}
+
+        <div className="flex items-center justify-between px-2 pt-1 text-sm">
+          <span className="font-semibold uppercase tracking-wider text-tinta/70">Total</span>
+          <span className="text-base font-bold text-tinta">{formatARS(total())}</span>
+        </div>
+
+        <button
+          onClick={onPay}
+          disabled={!canCheckout || loading}
+          className="w-full rounded-full bg-tinta py-3 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-celeste-500 disabled:opacity-40"
+        >
+          {loading ? "Procesando..." : "Pagar"}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_380px] lg:gap-10">
-      <div className="space-y-4">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Tu carrito</h1>
-        <ul className="divide-y divide-celeste-100 rounded-2xl ring-1 ring-celeste-100">
-          {items.map((i) => (
-            <li key={i.variantId} className="flex gap-4 p-4">
-              <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-celeste-50">
-                {i.image && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={i.image} alt={i.name} className="h-full w-full object-cover" />
-                )}
-              </div>
-              <div className="flex flex-1 items-center justify-between gap-4">
-                <div>
-                  <div className="font-medium">{i.name}</div>
-                  <div className="text-xs text-tinta/60">
-                    {[i.size, i.color].filter(Boolean).join(" · ")}
+    <div className="mx-auto w-full max-w-sm space-y-2">
+      <h1 className="text-3xl font-bold tracking-tight">Tu carrito</h1>
+
+      <ul className="space-y-1.5">
+        {items.map((i) => {
+          return (
+            <li key={i.variantId} className="relative">
+              <div className="flex items-stretch overflow-hidden rounded-2xl bg-white">
+                <div className="flex flex-1 flex-col p-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl">
+                      {i.image && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={i.image} alt={i.name} className="h-full w-full object-contain" draggable={false} />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1 leading-tight">
+                      <div className="break-words text-sm font-bold uppercase tracking-wide text-tinta">
+                        {i.name}
+                      </div>
+                      <div className="mt-0.5 text-[13px] font-semibold text-tinta/70">
+                        {[i.size, i.color].filter(Boolean).join(" · ")}
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-1 text-sm">{formatARS(i.price)}</div>
+                  <div className="mt-1 pr-11 text-right text-sm font-bold text-tinta">
+                    {formatARS(i.price)}
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    min={1}
-                    value={i.qty}
-                    onChange={(e) => setQty(i.variantId, Number(e.target.value))}
-                    className="h-9 w-16 rounded-full border border-celeste-200 px-3 text-center text-sm"
-                  />
+                <div className="flex w-14 flex-col items-center justify-center gap-1 bg-tinta px-2">
                   <button
-                    onClick={() => remove(i.variantId)}
-                    className="text-xs text-tinta/60 hover:text-red-500"
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => setQty(i.variantId, i.qty + 1)}
+                    className="text-white/80 hover:text-white"
+                    aria-label="Más"
                   >
-                    Quitar
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </button>
+                  <span className="text-base font-bold text-white">{i.qty}</span>
+                  <button
+                    type="button"
+                    onClick={() => (i.qty <= 1 ? remove(i.variantId) : setQty(i.variantId, i.qty - 1))}
+                    className="text-white/80 hover:text-white"
+                    aria-label="Menos"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                      <path d="M5 12h14" />
+                    </svg>
                   </button>
                 </div>
               </div>
             </li>
-          ))}
-        </ul>
+          );
+        })}
+      </ul>
 
-        <div className="card mt-6 space-y-4 p-6">
-          <h2 className="text-lg font-semibold">Datos de envío</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {(
-              [
-                ["name", "Nombre y apellido"],
-                ["email", "Email"],
-                ["phone", "Teléfono"],
-                ["address", "Dirección"],
-                ["city", "Ciudad"],
-                ["zip", "Código postal"],
-              ] as const
-            ).map(([key, label]) => (
-              <input
-                key={key}
-                placeholder={label}
-                value={form[key]}
-                onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                className="h-11 rounded-full border border-celeste-200 px-4 text-sm focus:border-celeste-500 focus:outline-none"
-              />
-            ))}
-          </div>
-        </div>
+      <div className="grid grid-cols-3 items-baseline px-2 pt-10 text-sm">
+        <span className="justify-self-start font-semibold uppercase tracking-wider text-tinta/70">
+          Total
+        </span>
+        <span className="justify-self-center text-base font-bold text-tinta">
+          {formatARS(total())}
+        </span>
+        <span className="justify-self-end text-[11px] font-semibold uppercase tracking-wider text-tinta/60">
+          {items.reduce((n, i) => n + i.qty, 0)} items
+        </span>
       </div>
 
-      <aside className="h-fit space-y-4 rounded-2xl bg-celeste-50/60 p-6 ring-1 ring-celeste-100">
-        <h2 className="text-lg font-semibold">Resumen</h2>
-        <div className="flex justify-between text-sm">
-          <span>Subtotal</span>
-          <span>{formatARS(total())}</span>
-        </div>
-        <div className="flex justify-between text-sm text-tinta/60">
-          <span>Envío</span>
-          <span>Se coordina con Andreani</span>
-        </div>
-        <div className="flex justify-between border-t border-celeste-200 pt-3 text-base font-semibold">
-          <span>Total</span>
-          <span>{formatARS(total())}</span>
-        </div>
-        {error && <p className="text-sm text-red-500">{error}</p>}
-        <button
-          onClick={onPay}
-          disabled={!canCheckout || loading}
-          className="btn-primary w-full"
-        >
-          {loading ? "Procesando..." : "Pagar con Mercado Pago"}
-        </button>
-        <p className="text-center text-xs text-tinta/50">
-          Serás redirigido al checkout seguro de Mercado Pago.
-        </p>
-      </aside>
+      <button
+        onClick={() => setStep("shipping")}
+        className="w-full rounded-full bg-tinta py-3 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-celeste-500"
+      >
+        Finalizar compra
+      </button>
     </div>
   );
 }

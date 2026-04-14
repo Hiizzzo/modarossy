@@ -16,6 +16,8 @@ export type CartItem = {
 
 type CartState = {
   items: CartItem[];
+  open: boolean;
+  setOpen: (v: boolean) => void;
   add: (item: CartItem) => void;
   remove: (variantId: string) => void;
   setQty: (variantId: string, qty: number) => void;
@@ -27,6 +29,8 @@ export const useCart = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
+      open: false,
+      setOpen: (v) => set({ open: v }),
       add: (item) =>
         set((state) => {
           const existing = state.items.find((i) => i.variantId === item.variantId);
@@ -54,6 +58,9 @@ export const useCart = create<CartState>()(
       clear: () => set({ items: [] }),
       total: () => get().items.reduce((t, i) => t + i.price * i.qty, 0),
     }),
-    { name: "rossi-cart" }
+    {
+      name: "rossi-cart",
+      partialize: (s) => ({ items: s.items }) as Partial<CartState>,
+    }
   )
 );
