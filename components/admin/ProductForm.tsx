@@ -14,6 +14,7 @@ export default function ProductForm() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [removeBg, setRemoveBg] = useState(false);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState<string>("camperas");
@@ -64,8 +65,32 @@ export default function ProductForm() {
       return;
     }
     const resized = await resizeImage(f, 1024);
-    setPhoto(resized);
-    setPhotoPreview(URL.createObjectURL(resized));
+    if (removeBg) {
+      setLoading("Quitando fondo...");
+      try {
+        const url = "https://esm.sh/@imgly/background-removal@1.7.0";
+        const mod = await import(/* webpackIgnore: true */ /* @vite-ignore */ url);
+        const removeBackground = (mod as { removeBackground: (input: Blob, cfg?: unknown) => Promise<Blob> }).removeBackground;
+        const cutoutBlob = await removeBackground(resized, {
+          model: "isnet",
+          output: { format: "image/png", quality: 0.9 },
+        });
+        const finalFile = new File([cutoutBlob], f.name.replace(/\.[^.]+$/, "") + ".png", {
+          type: "image/png",
+        });
+        setPhoto(finalFile);
+        setPhotoPreview(URL.createObjectURL(finalFile));
+      } catch {
+        setPhoto(resized);
+        setPhotoPreview(URL.createObjectURL(resized));
+        setMsg("No se pudo quitar el fondo, se usa la foto original");
+      } finally {
+        setLoading(null);
+      }
+    } else {
+      setPhoto(resized);
+      setPhotoPreview(URL.createObjectURL(resized));
+    }
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setCropping(true);
@@ -269,10 +294,25 @@ export default function ProductForm() {
         ref={fileRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         onChange={(e) => onPhoto(e.target.files?.[0] ?? null)}
       />
+
+      <label className="flex cursor-pointer items-center justify-between rounded-full border border-tinta/25 bg-white px-4 py-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-tinta">
+          Quitar fondo
+        </span>
+        <button
+          type="button"
+          onClick={() => setRemoveBg((v) => !v)}
+          className={`relative h-5 w-9 rounded-full transition ${removeBg ? "bg-celeste-500" : "bg-tinta/20"}`}
+          aria-pressed={removeBg}
+        >
+          <span
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${removeBg ? "left-[18px]" : "left-0.5"}`}
+          />
+        </button>
+      </label>
 
       <textarea
         value={description}
