@@ -137,7 +137,7 @@ export default function ProductGrid({ products }: { products: Product[] }) {
   return (
     <>
       <div
-        className="grid grid-cols-2 gap-x-2 gap-y-2 sm:gap-x-4 sm:gap-y-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+        className="grid grid-cols-2 gap-x-2 gap-y-5 sm:gap-x-4 sm:gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
@@ -178,7 +178,7 @@ export default function ProductGrid({ products }: { products: Product[] }) {
                 draggable={false}
                 className="block"
               >
-                <h3 className="mb-0.5 text-center text-xs font-semibold leading-tight">
+                <h3 className="mb-1 text-center text-base font-bold leading-tight sm:text-lg">
                   {p.name}
                 </h3>
                 <div className="relative aspect-square overflow-hidden bg-white">
