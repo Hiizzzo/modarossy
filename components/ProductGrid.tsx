@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDev, applyOverrides } from "@/lib/dev-store";
 import { useCart } from "@/lib/cart-store";
+import { useSearch } from "@/lib/search-store";
 import { usePageTransition } from "@/lib/page-transition";
 import { formatARS } from "@/lib/format";
 import type { Product } from "@/lib/products";
@@ -14,6 +15,7 @@ import EditProductSheet from "./EditProductSheet";
 export default function ProductGrid({ products }: { products: Product[] }) {
   const { isDev, overrides, setOverride } = useDev();
   const addToCart = useCart((s) => s.add);
+  const searchQuery = useSearch((s) => s.query);
   const [editing, setEditing] = useState<Product | null>(null);
   const transition = usePageTransition();
   const router = useRouter();
@@ -38,10 +40,18 @@ export default function ProductGrid({ products }: { products: Product[] }) {
     };
   }, [router]);
 
-  const baseVisible = useMemo(
-    () => applyOverrides(products, overrides, isDev),
-    [products, overrides, isDev]
-  );
+  const baseVisible = useMemo(() => {
+    const withOverrides = applyOverrides(products, overrides, isDev);
+    const term = searchQuery.trim().toLowerCase();
+    if (!term) return withOverrides;
+    const termDigits = term.replace(/\D/g, "");
+    const isNumeric = termDigits.length > 0 && /^\D*\d[\d\s.$,]*$/.test(term);
+    const maxPrice = isNumeric ? Number(termDigits) : null;
+    return withOverrides.filter((p) => {
+      if (maxPrice !== null) return Math.round(p.price) <= maxPrice;
+      return p.name.toLowerCase().includes(term);
+    });
+  }, [products, overrides, isDev, searchQuery]);
 
   const [order, setOrder] = useState<string[]>(() => baseVisible.map((p) => p.id));
   const [dragId, setDragId] = useState<string | null>(null);

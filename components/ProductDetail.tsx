@@ -65,13 +65,13 @@ export default function ProductDetail({ product }: { product: Product }) {
             </h1>
           </div>
 
-          <div className="relative mx-auto aspect-[4/5] w-full max-w-[200px] overflow-hidden bg-celeste-50 lg:max-w-none">
+          <div className="relative mx-auto aspect-[4/5] w-full max-w-[200px] overflow-hidden bg-white lg:max-w-none">
             {cover ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={cover}
                 alt={product.name}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-contain"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-celeste-100 to-white text-celeste-400">

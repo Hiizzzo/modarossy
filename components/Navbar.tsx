@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/lib/cart-store";
 import { useDev } from "@/lib/dev-store";
+import { useSearch } from "@/lib/search-store";
 import { categories } from "@/lib/categories";
 import { createClient } from "@/lib/supabase/client";
 
@@ -20,7 +22,20 @@ export default function Navbar() {
   const forceEnable = useDev((s) => s.forceEnable);
   const disable = useDev((s) => s.disable);
   const resetAll = useDev((s) => s.resetAll);
+  const router = useRouter();
+  const query = useSearch((s) => s.query);
+  const setQuery = useSearch((s) => s.setQuery);
   const [open, setOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const submitSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = query.trim();
+    if (!q) return;
+    setOpen(false);
+    setSearchOpen(false);
+    router.push("/tienda");
+  };
   const [gate, setGate] = useState(false);
   const [gatePw, setGatePw] = useState("");
   const [gateErr, setGateErr] = useState<string | null>(null);
@@ -30,6 +45,22 @@ export default function Navbar() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const tapsRef = useRef<{ count: number; t: number }>({ count: 0, t: 0 });
+  const searchWrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onDocDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (searchWrapRef.current?.contains(target)) return;
+      setSearchOpen(false);
+    };
+    document.addEventListener("mousedown", onDocDown);
+    document.addEventListener("touchstart", onDocDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocDown);
+      document.removeEventListener("touchstart", onDocDown);
+    };
+  }, [searchOpen]);
 
   const GATE_PASSWORD = "jaimito1842";
 
@@ -78,12 +109,34 @@ export default function Navbar() {
   return (
     <header className="fixed inset-x-0 top-0 z-40">
       <div className="bg-white/90 backdrop-blur">
-        <nav className="container-edge flex h-14 items-center justify-between sm:h-16">
+        <nav className="container-edge relative flex h-14 items-center justify-between sm:h-16">
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onClick={() => setSearchOpen((v) => !v)}
+            aria-label="Buscar"
+            className="absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center text-tinta transition hover:text-celeste-500 active:scale-90"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+          </button>
           <Link
-            href="/"
+            href="/tienda"
             onClick={(e) => {
               setOpen(false);
+              setSearchOpen(false);
               secretTap(e);
+              if (typeof window !== "undefined" && window.location.pathname === "/tienda") {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              } else {
+                requestAnimationFrame(() =>
+                  window.scrollTo({ top: 0, behavior: "auto" })
+                );
+              }
             }}
             className="select-none text-xl font-bold uppercase tracking-tighter text-celeste-500 transition-colors"
           >
@@ -152,6 +205,42 @@ export default function Navbar() {
             </button>
           </div>
         </nav>
+
+        {/* Search overlay */}
+        <div
+          ref={searchWrapRef}
+          className={`overflow-hidden bg-white transition-all duration-300 ease-out ${
+            searchOpen ? "max-h-24" : "max-h-0"
+          }`}
+        >
+          <form onSubmit={submitSearch} className="container-edge py-2">
+            <div className="flex items-center gap-2 border border-tinta/15 bg-white px-3 py-2.5 focus-within:border-celeste-500">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-tinta/50">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+              <input
+                autoFocus={searchOpen}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar por nombre o precio"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-tinta/40"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="text-tinta/40 hover:text-tinta"
+                  aria-label="Limpiar"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
 
         {/* Mobile menu */}
         <div
