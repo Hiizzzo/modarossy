@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Cropper from "react-easy-crop";
-import { removeBackground } from "@imgly/background-removal";
 
 const GROQ_KEY = process.env.NEXT_PUBLIC_GROQ_KEY || "";
 const CATEGORIES = ["camperas", "carteras", "zapatillas", "mochilas"];
@@ -132,9 +131,10 @@ export default function ProductForm() {
       const smallerForProcessing = await resizeImage(cropped, 800);
 
       // Procesar directamente (sin worker por ahora)
+      const { removeBackground } = await import("@imgly/background-removal");
       const removed = await removeBackground(smallerForProcessing, {
         model: 'isnet_quint8',
-        output: { quality: 0.8, type: "image/jpeg" },
+        output: { quality: 0.8, format: "image/jpeg" },
       });
       const finalBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
 
@@ -375,9 +375,10 @@ export default function ProductForm() {
                   800
                 );
 
+                const { removeBackground } = await import("@imgly/background-removal");
                 const removed = await removeBackground(smallerForProcessing, {
                   model: 'isnet_quint8',
-                  output: { quality: 0.8, type: "image/jpeg" },
+                  output: { quality: 0.8, format: "image/jpeg" },
                 });
                 const finalBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
                 const final = new File([finalBlob], photo.name, { type: "image/jpeg" });
