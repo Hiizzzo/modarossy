@@ -80,15 +80,13 @@ export default function ProductDetail({ product }: { product: Product }) {
             )}
           </div>
 
-          <div className="flex justify-center lg:justify-start">
-            <div className="flex flex-col items-start">
-              <p className="text-lg font-bold lg:text-2xl">
-                {formatARS(product.price)}
-              </p>
-              <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-tinta/60">
-                En tienda física: {formatARS(Math.floor(product.price / 1.1 / 1000) * 1000)}
-              </p>
-            </div>
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-center text-lg font-bold lg:text-2xl">
+              {formatARS(product.price)}
+            </p>
+            <p className="self-start text-[11px] font-semibold uppercase tracking-wider text-tinta/60">
+              <span className="inline-block w-36">En tienda física:</span>{formatARS(Math.floor(product.price / 1.1 / 1000) * 1000)}
+            </p>
           </div>
         </div>
 

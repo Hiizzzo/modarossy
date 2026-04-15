@@ -16,6 +16,15 @@ const barlow = Barlow({
 export const metadata: Metadata = {
   title: "modarossy",
   description: "Modarossy. Juan Manuel de Rosas 715, Chascomús.",
+  icons: {
+    icon: [
+      { url: "/icon.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icon.png", sizes: "512x512", type: "image/png" },
+    ],
+  },
+  manifest: "/manifest.json",
 };
 
 export const viewport = {
