@@ -116,6 +116,35 @@ export default function ProductDetail({ product }: { product: Product }) {
             )}
           </div>
 
+          {colorGroups.length > 1 && (
+            <div className="flex flex-wrap justify-center gap-1.5 pt-1">
+              {colorGroups.map((g) => {
+                const c = colorBySlug(g.color);
+                if (!c) return null;
+                const selected = g.color === colorSlug;
+                return (
+                  <button
+                    key={g.color}
+                    type="button"
+                    onClick={() => setColorSlug(g.color)}
+                    aria-label={c.label}
+                    title={c.label}
+                    style={{ background: c.hex }}
+                    className={`h-7 w-7 rounded-full border-2 transition ${
+                      selected
+                        ? "scale-110 border-tinta"
+                        : "border-tinta/20 hover:border-tinta/50"
+                    } ${
+                      c.slug === "blanco"
+                        ? "ring-1 ring-inset ring-tinta/10"
+                        : ""
+                    }`}
+                  />
+                );
+              })}
+            </div>
+          )}
+
           <div className="flex flex-col items-center gap-1">
             <p className="text-center text-lg font-bold lg:text-2xl">
               {formatARS(product.price)}
@@ -134,73 +163,37 @@ export default function ProductDetail({ product }: { product: Product }) {
                 {product.description}
               </p>
             )}
-            <div className="shrink-0 space-y-3">
-              {colorGroups.length > 1 && (
-                <div>
-                  <label className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.14em] text-tinta/60">
-                    Color
-                  </label>
-                  <div className="flex flex-wrap justify-end gap-1.5">
-                    {colorGroups.map((g) => {
-                      const c = colorBySlug(g.color);
-                      if (!c) return null;
-                      const selected = g.color === colorSlug;
-                      return (
-                        <button
-                          key={g.color}
-                          type="button"
-                          onClick={() => setColorSlug(g.color)}
-                          aria-label={c.label}
-                          title={c.label}
-                          style={{ background: c.hex }}
-                          className={`h-7 w-7 rounded-full border-2 transition ${
-                            selected
-                              ? "scale-110 border-tinta"
-                              : "border-tinta/20 hover:border-tinta/50"
-                          } ${
-                            c.slug === "blanco"
-                              ? "ring-1 ring-inset ring-tinta/10"
-                              : ""
-                          }`}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.14em] text-tinta/60">
-                  Talle
-                </label>
-                <div className="flex flex-wrap justify-end gap-1.5">
-                  {shownVariants.map((v) => {
-                    const disabled = v.stock <= 0;
-                    const selected = v.id === variantId;
-                    return (
-                      <button
-                        key={v.id}
-                        disabled={disabled}
-                        onClick={() => setVariantId(v.id)}
-                        className={`min-w-[36px] border px-2 py-1.5 text-xs font-semibold uppercase tracking-wider transition ${
-                          selected
-                            ? "border-tinta bg-tinta text-white"
-                            : "border-tinta/15 hover:border-tinta"
-                        } ${disabled ? "opacity-40" : ""}`}
-                      >
-                        {v.size || "Único"}
-                      </button>
-                    );
-                  })}
-                </div>
-                {variant && (
-                  <p className="mt-1 text-right text-[10px] text-tinta/60">
-                    {variant.stock > 0
-                      ? `${variant.stock} disponibles`
-                      : "Sin stock"}
-                  </p>
-                )}
+            <div className="shrink-0">
+              <label className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.14em] text-tinta/60">
+                Talle
+              </label>
+              <div className="flex flex-wrap justify-end gap-1.5">
+                {shownVariants.map((v) => {
+                  const disabled = v.stock <= 0;
+                  const selected = v.id === variantId;
+                  return (
+                    <button
+                      key={v.id}
+                      disabled={disabled}
+                      onClick={() => setVariantId(v.id)}
+                      className={`min-w-[36px] border px-2 py-1.5 text-xs font-semibold uppercase tracking-wider transition ${
+                        selected
+                          ? "border-tinta bg-tinta text-white"
+                          : "border-tinta/15 hover:border-tinta"
+                      } ${disabled ? "opacity-40" : ""}`}
+                    >
+                      {v.size || "Único"}
+                    </button>
+                  );
+                })}
               </div>
+              {variant && (
+                <p className="mt-1 text-right text-[10px] text-tinta/60">
+                  {variant.stock > 0
+                    ? `${variant.stock} disponibles`
+                    : "Sin stock"}
+                </p>
+              )}
             </div>
           </div>
 
