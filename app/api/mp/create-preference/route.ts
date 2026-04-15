@@ -66,17 +66,6 @@ export async function POST(req: Request) {
           unit_price: i.price,
           currency_id: "ARS",
         })),
-        payer: {
-          name: body.customer.name,
-          email: body.customer.email,
-          phone: body.customer.phone
-            ? { number: body.customer.phone }
-            : undefined,
-          address: {
-            street_name: body.customer.address,
-            zip_code: body.customer.zip,
-          },
-        },
         external_reference: orderId ?? undefined,
         back_urls: {
           success: `${siteUrl}/checkout/exito`,
