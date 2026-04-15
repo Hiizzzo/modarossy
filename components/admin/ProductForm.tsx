@@ -134,6 +134,7 @@ export default function ProductForm() {
       const { removeBackground } = await import("@imgly/background-removal");
       const removed = await removeBackground(smallerForProcessing, {
         model: 'isnet_quint8',
+        publicPath: 'https://unpkg.com/@imgly/background-removal@1.7.0/dist/',
         output: { quality: 0.8, format: "image/jpeg" },
       });
       const finalBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
@@ -378,6 +379,7 @@ export default function ProductForm() {
                 const { removeBackground } = await import("@imgly/background-removal");
                 const removed = await removeBackground(smallerForProcessing, {
                   model: 'isnet_quint8',
+                  publicPath: 'https://unpkg.com/@imgly/background-removal@1.7.0/dist/',
                   output: { quality: 0.8, format: "image/jpeg" },
                 });
                 const finalBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
