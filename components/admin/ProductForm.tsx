@@ -3,21 +3,50 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Cropper from "react-easy-crop";
+import { COLORS, colorBySlug } from "@/lib/colors";
 
-const GROQ_KEY = process.env.NEXT_PUBLIC_GROQ_KEY || "";
 const CATEGORIES = ["camperas", "carteras", "zapatillas", "mochilas"];
 
-type Variant = { size: string; color: string; stock: number };
+type SizeStock = { size: string; stock: number };
+type ColorGroup = {
+  key: string;
+  colorSlug: string;
+  photo: File | null;
+  photoPreview: string | null;
+  sizes: SizeStock[];
+};
+
+let nextGroupId = 0;
+const newGroup = (): ColorGroup => ({
+  key: `c${Date.now().toString(36)}-${nextGroupId++}`,
+  colorSlug: "",
+  photo: null,
+  photoPreview: null,
+  sizes: [{ size: "", stock: 1 }],
+});
 
 export default function ProductForm() {
   const router = useRouter();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState<string>("camperas");
   const [gender, setGender] = useState<"hombres" | "mujeres">("hombres");
+  const [price, setPrice] = useState<string>("");
+  const [groups, setGroups] = useState<ColorGroup[]>(() => [newGroup()]);
+
+  const [loading, setLoading] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const [croppingKey, setCroppingKey] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const croppedPixelsRef = useRef<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const fileInputsRef = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
     try {
@@ -27,26 +56,6 @@ export default function ProductForm() {
       if (g === "hombres" || g === "mujeres") setGender(g);
     } catch {}
   }, []);
-  const [price, setPrice] = useState<string>("");
-  const [variants, setVariants] = useState<Variant[]>([
-    { size: "", color: "", stock: 1 },
-  ]);
-
-  const [recording, setRecording] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-
-  const [loading, setLoading] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [processingTime, setProcessingTime] = useState(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const [cropping, setCropping] = useState(false);
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const croppedPixelsRef = useRef<{ x: number; y: number; width: number; height: number } | null>(
-    null
-  );
 
   const resizeImage = (file: File, max: number): Promise<File> =>
     new Promise((res) => {
@@ -68,34 +77,57 @@ export default function ProductForm() {
       img.src = URL.createObjectURL(file);
     });
 
-  const compositeOnWhite = (pngBlob: Blob): Promise<Blob> =>
-    new Promise((res) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext("2d")!;
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-        canvas.toBlob((b) => res(b!), "image/jpeg", 0.85);
-      };
-      img.src = URL.createObjectURL(pngBlob);
-    });
+  const updateGroup = (key: string, patch: Partial<ColorGroup>) =>
+    setGroups((gs) => gs.map((g) => (g.key === key ? { ...g, ...patch } : g)));
 
-  const onPhoto = async (f: File | null) => {
-    if (!f) {
-      setPhoto(null);
-      setPhotoPreview(null);
-      return;
-    }
+  const addGroup = () => {
+    setGroups((gs) => [...gs, newGroup()]);
+  };
+
+  const removeGroup = (key: string) => {
+    setGroups((gs) => (gs.length <= 1 ? gs : gs.filter((g) => g.key !== key)));
+  };
+
+  const updateSize = (key: string, i: number, patch: Partial<SizeStock>) =>
+    setGroups((gs) =>
+      gs.map((g) =>
+        g.key === key
+          ? {
+              ...g,
+              sizes: g.sizes.map((s, j) => (i === j ? { ...s, ...patch } : s)),
+            }
+          : g
+      )
+    );
+
+  const addSize = (key: string) =>
+    setGroups((gs) =>
+      gs.map((g) =>
+        g.key === key
+          ? { ...g, sizes: [...g.sizes, { size: "", stock: 1 }] }
+          : g
+      )
+    );
+
+  const removeSize = (key: string, i: number) =>
+    setGroups((gs) =>
+      gs.map((g) =>
+        g.key === key
+          ? { ...g, sizes: g.sizes.filter((_, j) => j !== i) }
+          : g
+      )
+    );
+
+  const onPhoto = async (key: string, f: File | null) => {
+    if (!f) return;
     const resized = await resizeImage(f, 900);
-    setPhoto(resized);
-    setPhotoPreview(URL.createObjectURL(resized));
+    updateGroup(key, {
+      photo: resized,
+      photoPreview: URL.createObjectURL(resized),
+    });
     setCrop({ x: 0, y: 0 });
     setZoom(1);
-    setCropping(true);
+    setCroppingKey(key);
   };
 
   const onCropComplete = useCallback(
@@ -106,13 +138,16 @@ export default function ProductForm() {
   );
 
   const applyCrop = async () => {
-    if (!photo || !photoPreview || !croppedPixelsRef.current) {
-      setCropping(false);
+    const key = croppingKey;
+    if (!key) return;
+    const group = groups.find((g) => g.key === key);
+    if (!group?.photo || !group.photoPreview || !croppedPixelsRef.current) {
+      setCroppingKey(null);
       return;
     }
     setLoading("Recortando...");
     const img = new Image();
-    img.src = photoPreview;
+    img.src = group.photoPreview;
     await new Promise((res) => (img.onload = res));
     const { x, y, width, height } = croppedPixelsRef.current;
     const canvas = document.createElement("canvas");
@@ -127,187 +162,80 @@ export default function ProductForm() {
     );
     const cropped = new File(
       [blob],
-      photo.name.replace(/\.[^.]+$/, "") + ".jpg",
+      group.photo.name.replace(/\.[^.]+$/, "") + ".jpg",
       { type: "image/jpeg" }
     );
-
-    // Remove background en Web Worker (no bloquea la UI)
-    setLoading("Quitando fondo...");
-    setCropping(false);
-    setProcessingTime(0);
-    const startTime = Date.now();
-
-    // Contador que se actualiza cada 100ms
-    timerRef.current = setInterval(() => {
-      setProcessingTime((Date.now() - startTime) / 1000);
-    }, 100);
-
-    try {
-      // Resize a max 800px para procesar más rápido
-      const smallerForProcessing = await resizeImage(cropped, 800);
-
-      // Procesar directamente (sin worker por ahora)
-      const { removeBackground } = await import("@imgly/background-removal");
-      const removed = await removeBackground(smallerForProcessing, {
-        model: 'isnet_quint8',
-        publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/',
-        output: { format: "image/png" },
-      });
-      const removedBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
-      const finalBlob = await compositeOnWhite(removedBlob);
-
-      const final = new File(
-        [finalBlob],
-        photo.name.replace(/\.[^.]+$/, "") + ".jpg",
-        { type: "image/jpeg" }
-      );
-
-      if (timerRef.current) clearInterval(timerRef.current);
-      const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-
-      setPhoto(final);
-      setPhotoPreview(URL.createObjectURL(final));
-      setLoading(null);
-      setProcessingTime(0);
-      setMsg(`✓ Fondo removido en ${totalTime}s`);
-    } catch (e) {
-      console.error("[removeBackground] fallo:", e);
-      if (timerRef.current) clearInterval(timerRef.current);
-      setPhoto(cropped);
-      setPhotoPreview(URL.createObjectURL(cropped));
-      setLoading(null);
-      setProcessingTime(0);
-      setMsg(`No se pudo quitar el fondo: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-
-  const transcribe = async (blob: Blob): Promise<string> => {
-    const fd = new FormData();
-    fd.append("file", new File([blob], "audio.webm", { type: "audio/webm" }));
-    fd.append("model", "whisper-large-v3-turbo");
-    fd.append("language", "es");
-    const r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${GROQ_KEY}` },
-      body: fd,
+    updateGroup(key, {
+      photo: cropped,
+      photoPreview: URL.createObjectURL(cropped),
     });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error?.message || "Error transcripción");
-    return j.text || "";
+    setCroppingKey(null);
+    setLoading(null);
   };
-
-  const extractFromText = async (transcript: string) => {
-    const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "meta-llama/llama-4-scout-17b-16e-instruct",
-        messages: [
-          {
-            role: "user",
-            content: `Descripción de una prenda:\n"${transcript}"\n\nDevolvé SOLO un JSON con:\n- name: nombre corto en español\n- category: una de ${JSON.stringify(CATEGORIES)}\n- price: número en pesos (sin símbolos)\n- description: 1-2 oraciones\n- variants: array [{size, color, stock}]. Si no menciona stock usá 1. Sin talles usá [{size:"Único",color:"",stock:1}]\n\nSolo el JSON.`,
-          },
-        ],
-        max_tokens: 500,
-      }),
-    });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error?.message || "Error IA");
-    const text = j.choices?.[0]?.message?.content || "";
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("No se pudo leer la IA");
-    return JSON.parse(match[0]);
-  };
-
-  const startRec = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      chunksRef.current = [];
-      const mr = new MediaRecorder(stream);
-      mr.ondataavailable = (e) => chunksRef.current.push(e.data);
-      mr.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        stream.getTracks().forEach((t) => t.stop());
-        try {
-          setLoading("Transcribiendo...");
-          const transcript = await transcribe(blob);
-          setLoading("Analizando...");
-          const d = await extractFromText(transcript);
-          if (d.name) setName(d.name);
-          if (d.category && CATEGORIES.includes(d.category)) setCategory(d.category);
-          if (d.price) setPrice(String(d.price));
-          if (Array.isArray(d.variants) && d.variants.length) setVariants(d.variants);
-          setLoading(null);
-        } catch (e) {
-          setLoading(null);
-          setMsg(e instanceof Error ? e.message : "Error IA");
-        }
-      };
-      mr.start();
-      mediaRecorderRef.current = mr;
-      setRecording(true);
-    } catch {
-      setMsg("No se pudo acceder al micrófono");
-    }
-  };
-
-  const stopRec = () => {
-    mediaRecorderRef.current?.stop();
-    setRecording(false);
-  };
-
-  const updateVariant = (i: number, patch: Partial<Variant>) =>
-    setVariants((vs) => vs.map((v, j) => (i === j ? { ...v, ...patch } : v)));
-  const addVariant = () =>
-    setVariants((vs) => [...vs, { size: "", color: "", stock: 1 }]);
-  const removeVariant = (i: number) =>
-    setVariants((vs) => vs.filter((_, j) => j !== i));
 
   const save = async () => {
-    if (!photo) {
-      setMsg("Falta la foto");
-      return;
-    }
     if (!name.trim() || !price) {
       setMsg("Falta nombre o precio");
+      return;
+    }
+    const validGroups = groups.filter((g) => g.colorSlug && g.photo);
+    if (validGroups.length === 0) {
+      setMsg("Agregá al menos un color con foto");
       return;
     }
     setLoading("Guardando...");
     setMsg(null);
     try {
-      const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+      const slug = name
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "");
       const fd = new FormData();
       fd.append("name", name);
       fd.append("slug", `${slug}-${Date.now().toString(36)}`);
       fd.append("description", "");
-      fd.append("price", String(Math.ceil((Number(price) * 1.1) / 1000) * 1000));
+      fd.append(
+        "price",
+        String(Math.ceil((Number(price) * 1.1) / 1000) * 1000)
+      );
       fd.append("category", category);
       fd.append("gender", gender);
       try {
         localStorage.setItem("rossi-last-cat", category);
         localStorage.setItem("rossi-last-gender", gender);
       } catch {}
+
+      const variants = validGroups.flatMap((g) =>
+        g.sizes.map((s) => ({
+          size: s.size,
+          color: g.colorSlug,
+          stock: s.stock,
+          photoKey: g.key,
+        }))
+      );
       fd.append("variants", JSON.stringify(variants));
-      fd.append("photo", photo);
+      for (const g of validGroups) {
+        fd.append(`photo_${g.key}`, g.photo!);
+      }
+
       const r = await fetch("/api/products", { method: "POST", body: fd });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Error al guardar");
 
       setMsg("Producto guardado ✓");
-      setPhoto(null);
-      setPhotoPreview(null);
+      setGroups([newGroup()]);
       setName("");
       setPrice("");
-      setVariants([{ size: "", color: "", stock: 1 }]);
       setLoading(null);
     } catch (e) {
       setLoading(null);
       setMsg(e instanceof Error ? e.message : "Error al guardar");
     }
   };
+
+  const croppingGroup = croppingKey
+    ? groups.find((g) => g.key === croppingKey)
+    : null;
 
   return (
     <div className="relative mx-auto w-full max-w-sm space-y-2.5 rounded-3xl bg-white p-4 shadow-2xl">
@@ -325,110 +253,19 @@ export default function ProductForm() {
           aria-label="Salir"
           className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white text-tinta transition hover:bg-tinta/5 active:scale-95"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+          >
             <path d="M6 6l12 12M18 6L6 18" />
           </svg>
         </button>
       </div>
-
-      <div className="group relative">
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="flex h-32 w-full items-center justify-center rounded-2xl border border-tinta/25 bg-white text-tinta transition hover:bg-celeste-50"
-        >
-          {photoPreview ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoPreview} alt="" className="h-full object-contain" />
-          ) : (
-            <div className="flex flex-col items-center gap-1">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M3 7h3l2-3h8l2 3h3v13H3z" />
-                <circle cx="12" cy="13" r="4" />
-              </svg>
-              <span className="text-[11px] font-semibold uppercase tracking-wider">Sacar o subir foto</span>
-            </div>
-          )}
-        </button>
-        {photoPreview && photo && msg?.includes("Fondo removido") && (
-          <button
-            type="button"
-            onClick={async () => {
-              setLoading("Reprocesando...");
-              setMsg(null);
-              try {
-                // Mismo proceso de applyCrop
-                const resized = await resizeImage(photo, 900);
-                const img = new Image();
-                img.src = URL.createObjectURL(resized);
-                await new Promise(res => img.onload = res);
-
-                const targetRatio = 4 / 5;
-                const imgRatio = img.width / img.height;
-                let cropWidth = img.width;
-                let cropHeight = img.height;
-
-                if (imgRatio > targetRatio) {
-                  cropWidth = img.height * targetRatio;
-                } else {
-                  cropHeight = img.width / targetRatio;
-                }
-
-                const x = (img.width - cropWidth) / 2;
-                const y = (img.height - cropHeight) / 2;
-
-                const canvas = document.createElement("canvas");
-                canvas.width = cropWidth;
-                canvas.height = cropHeight;
-                const ctx = canvas.getContext("2d")!;
-                ctx.fillStyle = "#ffffff";
-                ctx.fillRect(0, 0, cropWidth, cropHeight);
-                ctx.drawImage(img, x, y, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-
-                const croppedBlob: Blob = await new Promise(res =>
-                  canvas.toBlob(b => res(b!), "image/jpeg", 0.85)
-                );
-
-                const smallerForProcessing = await resizeImage(
-                  new File([croppedBlob], photo.name, { type: "image/jpeg" }),
-                  800
-                );
-
-                const { removeBackground } = await import("@imgly/background-removal");
-                const removed = await removeBackground(smallerForProcessing, {
-                  model: 'isnet_quint8',
-                  publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/',
-                  output: { format: "image/png" },
-                });
-                const removedBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
-                const finalBlob = await compositeOnWhite(removedBlob);
-                const final = new File([finalBlob], photo.name, { type: "image/jpeg" });
-
-                setPhoto(final);
-                setPhotoPreview(URL.createObjectURL(final));
-                setLoading(null);
-                setMsg("✓ Reprocesado");
-              } catch (e) {
-                setLoading(null);
-                setMsg("Error al reprocesar");
-              }
-            }}
-            className="absolute left-2 top-2 hidden rounded-full bg-celeste-500 p-2 text-white opacity-0 shadow-lg transition group-hover:block group-hover:opacity-100"
-            title="Reintentar quitar fondo"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
-            </svg>
-          </button>
-        )}
-      </div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => onPhoto(e.target.files?.[0] ?? null)}
-      />
 
       <div className="grid grid-cols-2 gap-2">
         <button
@@ -487,41 +324,158 @@ export default function ProductForm() {
         </select>
       </div>
 
-      <div className="space-y-2 pt-6">
-        {variants.map((v, i) => (
-          <div key={i} className="flex gap-1.5">
-            <input
-              value={v.size}
-              onChange={(e) => updateVariant(i, { size: e.target.value })}
-              placeholder="Talle"
-              className="h-11 w-full min-w-0 rounded-full border border-tinta/25 bg-white px-3 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
-            />
-            <input
-              type="number"
-              value={v.stock}
-              onChange={(e) => updateVariant(i, { stock: Number(e.target.value) })}
-              placeholder="Stock"
-              className="h-11 w-16 rounded-full border border-tinta/25 bg-white px-3 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
-            />
-            {i === variants.length - 1 ? (
+      <div className="space-y-3 pt-6">
+        {groups.map((g, gi) => {
+          const selectedColor = colorBySlug(g.colorSlug);
+          return (
+            <div
+              key={g.key}
+              className="space-y-2 rounded-2xl border border-tinta/15 bg-white p-3"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-tinta/60">
+                  Color {gi + 1}
+                  {selectedColor ? ` · ${selectedColor.label}` : ""}
+                </span>
+                {groups.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeGroup(g.key)}
+                    aria-label="Quitar color"
+                    className="flex h-6 w-6 items-center justify-center rounded-full text-tinta/40 hover:text-tinta"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                    >
+                      <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              <div className="-mx-1 flex flex-wrap gap-1.5 px-1">
+                {COLORS.map((c) => {
+                  const selected = g.colorSlug === c.slug;
+                  return (
+                    <button
+                      key={c.slug}
+                      type="button"
+                      onClick={() => updateGroup(g.key, { colorSlug: c.slug })}
+                      aria-label={c.label}
+                      title={c.label}
+                      style={{ background: c.hex }}
+                      className={`h-7 w-7 flex-shrink-0 rounded-full border-2 transition ${
+                        selected
+                          ? "scale-110 border-tinta"
+                          : "border-tinta/20 hover:border-tinta/50"
+                      } ${
+                        c.slug === "blanco"
+                          ? "ring-1 ring-inset ring-tinta/10"
+                          : ""
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+
               <button
                 type="button"
-                onClick={addVariant}
-                className="h-11 w-11 flex-shrink-0 rounded-full bg-tinta text-lg text-white hover:bg-tinta/80"
+                onClick={() => fileInputsRef.current[g.key]?.click()}
+                className="flex h-32 w-full items-center justify-center rounded-2xl border border-tinta/25 bg-white text-tinta transition hover:bg-celeste-50"
               >
-                +
+                {g.photoPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={g.photoPreview}
+                    alt=""
+                    className="h-full object-contain"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-1">
+                    <svg
+                      width="26"
+                      height="26"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
+                      <path d="M3 7h3l2-3h8l2 3h3v13H3z" />
+                      <circle cx="12" cy="13" r="4" />
+                    </svg>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider">
+                      Sacar o subir foto
+                    </span>
+                  </div>
+                )}
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => removeVariant(i)}
-                className="h-11 w-11 flex-shrink-0 text-lg text-tinta/40 hover:text-tinta"
-              >
-                ×
-              </button>
-            )}
-          </div>
-        ))}
+              <input
+                ref={(el) => {
+                  fileInputsRef.current[g.key] = el;
+                }}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => onPhoto(g.key, e.target.files?.[0] ?? null)}
+              />
+
+              <div className="space-y-1.5">
+                {g.sizes.map((s, i) => (
+                  <div key={i} className="flex gap-1.5">
+                    <input
+                      value={s.size}
+                      onChange={(e) =>
+                        updateSize(g.key, i, { size: e.target.value })
+                      }
+                      placeholder="Talle"
+                      className="h-11 w-full min-w-0 rounded-full border border-tinta/25 bg-white px-3 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+                    />
+                    <input
+                      type="number"
+                      value={s.stock}
+                      onChange={(e) =>
+                        updateSize(g.key, i, { stock: Number(e.target.value) })
+                      }
+                      placeholder="Stock"
+                      className="h-11 w-16 rounded-full border border-tinta/25 bg-white px-3 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+                    />
+                    {i === g.sizes.length - 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => addSize(g.key)}
+                        className="h-11 w-11 flex-shrink-0 rounded-full bg-tinta text-lg text-white hover:bg-tinta/80"
+                      >
+                        +
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => removeSize(g.key, i)}
+                        className="h-11 w-11 flex-shrink-0 text-lg text-tinta/40 hover:text-tinta"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+
+        <button
+          type="button"
+          onClick={addGroup}
+          className="w-full rounded-full border border-dashed border-tinta/30 py-3 text-[11px] font-bold uppercase tracking-wider text-tinta/70 transition hover:border-tinta hover:text-tinta"
+        >
+          + Agregar otro color
+        </button>
       </div>
 
       <button
@@ -533,19 +487,13 @@ export default function ProductForm() {
         {loading || "Guardar producto"}
       </button>
 
-      {loading === "Quitando fondo..." && processingTime > 0 && (
-        <p className="text-center text-sm font-bold text-celeste-600">
-          {processingTime.toFixed(1)}s
-        </p>
-      )}
-
       {msg && <p className="text-center text-xs text-tinta/70">{msg}</p>}
 
-      {cropping && photoPreview && (
+      {croppingGroup && croppingGroup.photoPreview && (
         <div className="fixed inset-0 z-[80] flex flex-col bg-white">
           <div className="relative flex-1">
             <Cropper
-              image={photoPreview}
+              image={croppingGroup.photoPreview}
               crop={crop}
               zoom={zoom}
               aspect={4 / 5}
@@ -564,7 +512,9 @@ export default function ProductForm() {
             />
           </div>
           <div className="flex items-center gap-3 bg-white p-4">
-            <span className="text-xs uppercase tracking-wider text-tinta/60">Zoom</span>
+            <span className="text-xs uppercase tracking-wider text-tinta/60">
+              Zoom
+            </span>
             <input
               type="range"
               min={0.5}
@@ -578,7 +528,7 @@ export default function ProductForm() {
           <div className="flex gap-2 bg-white px-4 pb-4">
             <button
               type="button"
-              onClick={() => setCropping(false)}
+              onClick={() => setCroppingKey(null)}
               className="flex-1 border border-tinta/20 py-3 text-xs font-bold uppercase tracking-wider"
             >
               Cancelar
