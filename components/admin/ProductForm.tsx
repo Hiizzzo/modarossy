@@ -38,8 +38,6 @@ export default function ProductForm() {
 
   const [loading, setLoading] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [processingTime, setProcessingTime] = useState(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [cropping, setCropping] = useState(false);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -131,54 +129,10 @@ export default function ProductForm() {
       { type: "image/jpeg" }
     );
 
-    // Remove background en Web Worker (no bloquea la UI)
-    setLoading("Quitando fondo...");
+    setPhoto(cropped);
+    setPhotoPreview(URL.createObjectURL(cropped));
     setCropping(false);
-    setProcessingTime(0);
-    const startTime = Date.now();
-
-    // Contador que se actualiza cada 100ms
-    timerRef.current = setInterval(() => {
-      setProcessingTime((Date.now() - startTime) / 1000);
-    }, 100);
-
-    try {
-      // Resize a max 800px para procesar más rápido
-      const smallerForProcessing = await resizeImage(cropped, 800);
-
-      // Procesar directamente (sin worker por ahora)
-      const { removeBackground } = await import("@imgly/background-removal");
-      const removed = await removeBackground(smallerForProcessing, {
-        model: 'isnet_quint8',
-        publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/',
-        output: { format: "image/png" },
-      });
-      const removedBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
-      const finalBlob = await compositeOnWhite(removedBlob);
-
-      const final = new File(
-        [finalBlob],
-        photo.name.replace(/\.[^.]+$/, "") + ".jpg",
-        { type: "image/jpeg" }
-      );
-
-      if (timerRef.current) clearInterval(timerRef.current);
-      const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-
-      setPhoto(final);
-      setPhotoPreview(URL.createObjectURL(final));
-      setLoading(null);
-      setProcessingTime(0);
-      setMsg(`✓ Fondo removido en ${totalTime}s`);
-    } catch (e) {
-      console.error("[removeBackground] fallo:", e);
-      if (timerRef.current) clearInterval(timerRef.current);
-      setPhoto(cropped);
-      setPhotoPreview(URL.createObjectURL(cropped));
-      setLoading(null);
-      setProcessingTime(0);
-      setMsg(`No se pudo quitar el fondo: ${e instanceof Error ? e.message : String(e)}`);
-    }
+    setLoading(null);
   };
 
   const transcribe = async (blob: Blob): Promise<string> => {
@@ -350,7 +304,7 @@ export default function ProductForm() {
             </div>
           )}
         </button>
-        {photoPreview && photo && msg?.includes("Fondo removido") && (
+        {photoPreview && photo && (
           <button
             type="button"
             onClick={async () => {
@@ -532,12 +486,6 @@ export default function ProductForm() {
       >
         {loading || "Guardar producto"}
       </button>
-
-      {loading === "Quitando fondo..." && processingTime > 0 && (
-        <p className="text-center text-sm font-bold text-celeste-600">
-          {processingTime.toFixed(1)}s
-        </p>
-      )}
 
       {msg && <p className="text-center text-xs text-tinta/70">{msg}</p>}
 
