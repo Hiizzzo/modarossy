@@ -68,6 +68,22 @@ export default function ProductForm() {
       img.src = URL.createObjectURL(file);
     });
 
+  const compositeOnWhite = (pngBlob: Blob): Promise<Blob> =>
+    new Promise((res) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((b) => res(b!), "image/jpeg", 0.85);
+      };
+      img.src = URL.createObjectURL(pngBlob);
+    });
+
   const onPhoto = async (f: File | null) => {
     if (!f) {
       setPhoto(null);
@@ -135,9 +151,10 @@ export default function ProductForm() {
       const removed = await removeBackground(smallerForProcessing, {
         model: 'isnet_quint8',
         publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/',
-        output: { quality: 0.8, format: "image/jpeg" },
+        output: { format: "image/png" },
       });
-      const finalBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
+      const removedBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
+      const finalBlob = await compositeOnWhite(removedBlob);
 
       const final = new File(
         [finalBlob],
@@ -154,12 +171,13 @@ export default function ProductForm() {
       setProcessingTime(0);
       setMsg(`✓ Fondo removido en ${totalTime}s`);
     } catch (e) {
+      console.error("[removeBackground] fallo:", e);
       if (timerRef.current) clearInterval(timerRef.current);
       setPhoto(cropped);
       setPhotoPreview(URL.createObjectURL(cropped));
       setLoading(null);
       setProcessingTime(0);
-      setMsg("No se pudo quitar el fondo, usando imagen original");
+      setMsg(`No se pudo quitar el fondo: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -380,9 +398,10 @@ export default function ProductForm() {
                 const removed = await removeBackground(smallerForProcessing, {
                   model: 'isnet_quint8',
                   publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/',
-                  output: { quality: 0.8, format: "image/jpeg" },
+                  output: { format: "image/png" },
                 });
-                const finalBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
+                const removedBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
+                const finalBlob = await compositeOnWhite(removedBlob);
                 const final = new File([finalBlob], photo.name, { type: "image/jpeg" });
 
                 setPhoto(final);
