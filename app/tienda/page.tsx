@@ -6,10 +6,10 @@ export const dynamic = "force-dynamic";
 export default async function TiendaPage({
   searchParams,
 }: {
-  searchParams: { cat?: string; q?: string };
+  searchParams: { cat?: string; q?: string; gender?: string };
 }) {
-  const { cat, q } = searchParams;
-  const all = await getAllProducts(cat);
+  const { cat, q, gender } = searchParams;
+  const all = await getAllProducts(cat, gender);
 
   const term = (q ?? "").trim().toLowerCase();
   const products = term
@@ -23,7 +23,7 @@ export default async function TiendaPage({
     : all;
 
   return (
-    <div className="container-edge pb-12 pt-5 sm:pt-10">
+    <div className="container-edge pb-0 pt-5 sm:pt-10">
       {term && (
         <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-tinta/60">
           Resultados para “{q}” · {products.length}

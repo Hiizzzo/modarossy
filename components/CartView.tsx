@@ -8,12 +8,12 @@ import { formatARS } from "@/lib/format";
 export default function CartView() {
   const { items, remove, setQty, total } = useCart();
   const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    address: "",
-    city: "",
-    zip: "",
+    name: "Test Buyer",
+    email: "test@test.com",
+    phone: "1111111111",
+    address: "Calle Test 123",
+    city: "Chascomús",
+    zip: "7130",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -197,11 +197,13 @@ export default function CartView() {
       </div>
 
       <button
-        onClick={() => setStep("shipping")}
-        className="w-full rounded-full bg-tinta py-3 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-celeste-500"
+        onClick={onPay}
+        disabled={loading}
+        className="w-full rounded-full bg-tinta py-3 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-celeste-500 disabled:opacity-40"
       >
-        Finalizar compra
+        {loading ? "Procesando..." : "Finalizar compra"}
       </button>
+      {error && <p className="text-center text-xs text-red-500">{error}</p>}
     </div>
   );
 }

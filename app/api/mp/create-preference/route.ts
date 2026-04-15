@@ -83,8 +83,9 @@ export async function POST(req: Request) {
           pending: `${siteUrl}/checkout/pendiente`,
           failure: `${siteUrl}/checkout/error`,
         },
-        auto_return: "approved",
-        notification_url: `${siteUrl}/api/mp/webhook`,
+        ...(siteUrl.startsWith("https://")
+          ? { auto_return: "approved" as const, notification_url: `${siteUrl}/api/mp/webhook` }
+          : {}),
       },
     });
 

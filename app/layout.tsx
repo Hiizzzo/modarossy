@@ -15,7 +15,7 @@ const barlow = Barlow({
 
 export const metadata: Metadata = {
   title: "modarossy",
-  description: "Modarossy. Juan Manuel de Rosas 720, Chascomús.",
+  description: "Modarossy. Juan Manuel de Rosas 715, Chascomús.",
 };
 
 export const viewport = {
@@ -35,7 +35,7 @@ export default function RootLayout({
     <html lang="es" className={barlow.variable}>
       <body className="min-h-screen bg-white font-sans text-tinta antialiased">
         <Navbar />
-        <main className="pb-12 pt-12 sm:pt-16">
+        <main className="pb-14 pt-12 sm:pt-16">
           <PageAnimator>{children}</PageAnimator>
         </main>
         <AnnouncementBar />
