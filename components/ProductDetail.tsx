@@ -1,21 +1,57 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatARS } from "@/lib/format";
-import type { Product } from "@/lib/products";
+import type { Product, Variant } from "@/lib/products";
+import { colorBySlug } from "@/lib/colors";
 import { useCart } from "@/lib/cart-store";
 import { useRouter } from "next/navigation";
 
+type ColorGroup = {
+  color: string;
+  image: string | null;
+  variants: Variant[];
+};
+
 export default function ProductDetail({ product }: { product: Product }) {
+  const colorGroups = useMemo<ColorGroup[]>(() => {
+    const map = new Map<string, ColorGroup>();
+    for (const v of product.variants) {
+      if (!v.color) continue;
+      let g = map.get(v.color);
+      if (!g) {
+        g = { color: v.color, image: v.image_url ?? null, variants: [] };
+        map.set(v.color, g);
+      }
+      if (!g.image && v.image_url) g.image = v.image_url;
+      g.variants.push(v);
+    }
+    return Array.from(map.values());
+  }, [product.variants]);
+
+  const [colorSlug, setColorSlug] = useState<string | null>(
+    colorGroups[0]?.color ?? null
+  );
+
+  const activeGroup =
+    colorGroups.find((g) => g.color === colorSlug) ?? null;
+  const shownVariants = activeGroup?.variants ?? product.variants;
+  const cover = activeGroup?.image ?? product.images[0] ?? null;
+
   const firstAvailable =
-    product.variants.find((v) => v.stock > 0) ?? product.variants[0];
+    shownVariants.find((v) => v.stock > 0) ?? shownVariants[0];
   const [variantId, setVariantId] = useState(firstAvailable?.id ?? "");
-  const [qty, setQty] = useState(1);
+
+  useEffect(() => {
+    const first =
+      shownVariants.find((v) => v.stock > 0) ?? shownVariants[0];
+    setVariantId(first?.id ?? "");
+  }, [colorSlug, shownVariants]);
+
+  const variant = shownVariants.find((v) => v.id === variantId);
+
   const add = useCart((s) => s.add);
   const router = useRouter();
-
-  const variant = product.variants.find((v) => v.id === variantId);
-  const cover = product.images[0];
 
   const handleAdd = () => {
     if (!variant) return;
@@ -26,8 +62,8 @@ export default function ProductDetail({ product }: { product: Product }) {
       size: variant.size ?? undefined,
       color: variant.color ?? undefined,
       price: product.price,
-      image: cover,
-      qty,
+      image: cover ?? "",
+      qty: 1,
     });
     router.push("/carrito");
   };
@@ -85,7 +121,8 @@ export default function ProductDetail({ product }: { product: Product }) {
               {formatARS(product.price)}
             </p>
             <p className="self-start text-[11px] font-semibold uppercase tracking-wider text-tinta/60">
-              <span className="inline-block w-36">En tienda física:</span>{formatARS(Math.floor(product.price / 1.1 / 1000) * 1000)}
+              <span className="inline-block w-36">En tienda física:</span>
+              {formatARS(Math.floor(product.price / 1.1 / 1000) * 1000)}
             </p>
           </div>
         </div>
@@ -97,35 +134,73 @@ export default function ProductDetail({ product }: { product: Product }) {
                 {product.description}
               </p>
             )}
-            <div className="shrink-0">
-              <label className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.14em] text-tinta/60">
-                Talle
-              </label>
-              <div className="flex flex-wrap justify-end gap-1.5">
-                {product.variants.map((v) => {
-                  const disabled = v.stock <= 0;
-                  const selected = v.id === variantId;
-                  return (
-                    <button
-                      key={v.id}
-                      disabled={disabled}
-                      onClick={() => setVariantId(v.id)}
-                      className={`min-w-[36px] border px-2 py-1.5 text-xs font-semibold uppercase tracking-wider transition ${
-                        selected
-                          ? "border-tinta bg-tinta text-white"
-                          : "border-tinta/15 hover:border-tinta"
-                      } ${disabled ? "opacity-40" : ""}`}
-                    >
-                      {v.size || "Único"}
-                    </button>
-                  );
-                })}
-              </div>
-              {variant && (
-                <p className="mt-1 text-right text-[10px] text-tinta/60">
-                  {variant.stock > 0 ? `${variant.stock} disponibles` : "Sin stock"}
-                </p>
+            <div className="shrink-0 space-y-3">
+              {colorGroups.length > 1 && (
+                <div>
+                  <label className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.14em] text-tinta/60">
+                    Color
+                  </label>
+                  <div className="flex flex-wrap justify-end gap-1.5">
+                    {colorGroups.map((g) => {
+                      const c = colorBySlug(g.color);
+                      if (!c) return null;
+                      const selected = g.color === colorSlug;
+                      return (
+                        <button
+                          key={g.color}
+                          type="button"
+                          onClick={() => setColorSlug(g.color)}
+                          aria-label={c.label}
+                          title={c.label}
+                          style={{ background: c.hex }}
+                          className={`h-7 w-7 rounded-full border-2 transition ${
+                            selected
+                              ? "scale-110 border-tinta"
+                              : "border-tinta/20 hover:border-tinta/50"
+                          } ${
+                            c.slug === "blanco"
+                              ? "ring-1 ring-inset ring-tinta/10"
+                              : ""
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
               )}
+
+              <div>
+                <label className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.14em] text-tinta/60">
+                  Talle
+                </label>
+                <div className="flex flex-wrap justify-end gap-1.5">
+                  {shownVariants.map((v) => {
+                    const disabled = v.stock <= 0;
+                    const selected = v.id === variantId;
+                    return (
+                      <button
+                        key={v.id}
+                        disabled={disabled}
+                        onClick={() => setVariantId(v.id)}
+                        className={`min-w-[36px] border px-2 py-1.5 text-xs font-semibold uppercase tracking-wider transition ${
+                          selected
+                            ? "border-tinta bg-tinta text-white"
+                            : "border-tinta/15 hover:border-tinta"
+                        } ${disabled ? "opacity-40" : ""}`}
+                      >
+                        {v.size || "Único"}
+                      </button>
+                    );
+                  })}
+                </div>
+                {variant && (
+                  <p className="mt-1 text-right text-[10px] text-tinta/60">
+                    {variant.stock > 0
+                      ? `${variant.stock} disponibles`
+                      : "Sin stock"}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 

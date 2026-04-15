@@ -46,3 +46,4 @@ create policy "read variants" on product_variants for select using (true);
 
 -- Migration for existing installs
 alter table products add column if not exists gender text;
+alter table product_variants add column if not exists image_url text;
