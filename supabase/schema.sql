@@ -9,6 +9,7 @@ create table if not exists products (
   description text,
   price numeric(10,2) not null,
   category text,
+  gender text,
   images text[] not null default '{}',
   active boolean not null default true,
   created_at timestamptz default now()
@@ -42,3 +43,6 @@ alter table orders enable row level security;
 
 create policy "read products" on products for select using (active = true);
 create policy "read variants" on product_variants for select using (true);
+
+-- Migration for existing installs
+alter table products add column if not exists gender text;

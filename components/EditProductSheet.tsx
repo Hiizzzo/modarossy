@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { useDev } from "@/lib/dev-store";
 import type { Product } from "@/lib/products";
 
@@ -11,12 +13,18 @@ export default function EditProductSheet({
   product: Product;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const { overrides, setOverride, setVariantPatch } = useDev();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const o = overrides[product.id] ?? {};
 
   const [name, setName] = useState(o.name ?? product.name);
-  const [description, setDescription] = useState(o.description ?? product.description ?? "");
   const [price, setPrice] = useState(o.price ?? product.price);
+  const [category, setCategory] = useState(product.category ?? "camperas");
+  const [gender, setGender] = useState<"hombres" | "mujeres">(
+    (product.gender as "hombres" | "mujeres") ?? "hombres"
+  );
   const image = o.image ?? product.images[0] ?? "";
   const [variants, setVariants] = useState(
     product.variants.map((v) => ({
@@ -27,8 +35,8 @@ export default function EditProductSheet({
     }))
   );
 
-  const save = () => {
-    setOverride(product.id, { name, description, price });
+  const save = async () => {
+    setOverride(product.id, { name, price });
     variants.forEach((v) =>
       setVariantPatch(product.id, v.id, {
         stock: v.stock,
@@ -37,6 +45,14 @@ export default function EditProductSheet({
       })
     );
     onClose();
+    try {
+      await fetch(`/api/products/${product.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, gender, name, price }),
+      });
+    } catch {}
+    router.refresh();
   };
 
   const hide = () => {
@@ -48,23 +64,23 @@ export default function EditProductSheet({
   const [confirmDel, setConfirmDel] = useState(false);
   const remove = async () => {
     setDeleting(true);
+    setOverride(product.id, { hidden: true });
+    onClose();
     try {
-      const r = await fetch(`/api/products/${product.id}`, { method: "DELETE" });
-      if (!r.ok) throw new Error();
-      onClose();
-    } catch {
-      setDeleting(false);
-    }
+      await fetch(`/api/products/${product.id}`, { method: "DELETE" });
+    } catch {}
+    router.refresh();
   };
 
-  return (
+  if (!mounted) return null;
+  return createPortal(
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
+      className="edit-sheet-backdrop fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 pb-16 pt-16 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative mx-auto w-full max-w-sm space-y-2.5 rounded-3xl bg-white p-4 shadow-2xl"
+        className="edit-sheet-card relative mx-auto flex max-h-[calc(100svh-9rem)] w-full max-w-sm flex-col gap-2.5 overflow-y-auto rounded-3xl bg-white p-4 shadow-2xl"
       >
         <div className="flex items-center gap-2">
           <input
@@ -96,21 +112,50 @@ export default function EditProductSheet({
           )}
         </div>
 
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Descripción"
-          rows={2}
-          className="w-full resize-none rounded-2xl border border-tinta/25 bg-white p-3 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
-        />
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setGender("hombres")}
+            className={`h-11 rounded-full border text-[11px] font-bold uppercase tracking-wider transition ${
+              gender === "hombres"
+                ? "border-celeste-500 bg-celeste-500 text-white"
+                : "border-tinta/25 bg-white text-tinta"
+            }`}
+          >
+            Hombres
+          </button>
+          <button
+            type="button"
+            onClick={() => setGender("mujeres")}
+            className={`h-11 rounded-full border text-[11px] font-bold uppercase tracking-wider transition ${
+              gender === "mujeres"
+                ? "border-celeste-500 bg-celeste-500 text-white"
+                : "border-tinta/25 bg-white text-tinta"
+            }`}
+          >
+            Mujeres
+          </button>
+        </div>
 
-        <input
-          type="number"
-          value={price || ""}
-          onChange={(e) => setPrice(Number(e.target.value))}
-          placeholder="Precio"
-          className="h-11 w-full rounded-full border border-tinta/25 bg-white px-4 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
-        />
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="number"
+            value={price || ""}
+            onChange={(e) => setPrice(Number(e.target.value))}
+            placeholder="Precio"
+            className="h-11 w-full rounded-full border border-tinta/25 bg-white px-4 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+          />
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="h-11 w-full rounded-full border border-tinta/25 bg-white px-4 text-sm text-tinta focus:border-celeste-500 focus:outline-none"
+          >
+            <option value="camperas">camperas</option>
+            <option value="carteras">carteras</option>
+            <option value="zapatillas">zapatillas</option>
+            <option value="mochilas">mochilas</option>
+          </select>
+        </div>
 
         <div className="space-y-1.5">
           {variants.map((v, i) => {
@@ -189,6 +234,7 @@ export default function EditProductSheet({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

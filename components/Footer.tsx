@@ -78,7 +78,7 @@ export default function Footer() {
         <div>
           <p className="eyebrow">Contacto</p>
           <address className="mt-4 space-y-1 text-sm not-italic text-tinta/70">
-            <div>Juan Manuel de Rosas 720</div>
+            <div>Juan Manuel de Rosas 715</div>
             <div>Chascomús, Buenos Aires</div>
             <a
               href="https://www.google.com/maps/search/?api=1&query=Juan+Manuel+de+Rosas+720+Chascomus"

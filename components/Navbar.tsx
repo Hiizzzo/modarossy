@@ -27,6 +27,11 @@ export default function Navbar() {
   const setQuery = useSearch((s) => s.setQuery);
   const [open, setOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [menuGender, setMenuGender] = useState<"hombres" | "mujeres" | null>(null);
+
+  useEffect(() => {
+    if (!open) setMenuGender(null);
+  }, [open]);
 
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -249,18 +254,55 @@ export default function Navbar() {
           }`}
         >
           <div className="container-edge flex flex-col py-2">
-            {categories
-              .filter((c) => c.slug)
-              .map((c) => (
-                <Link
-                  key={c.slug}
-                  href={`/tienda?cat=${c.slug}`}
-                  onClick={() => setOpen(false)}
-                  className="border-b border-tinta/5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
+            {menuGender === null ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setMenuGender("hombres")}
+                  className="flex items-center justify-between border-b border-tinta/5 py-4 text-left text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
                 >
-                  {c.label}
-                </Link>
-              ))}
+                  <span>Hombres</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMenuGender("mujeres")}
+                  className="flex items-center justify-between border-b border-tinta/5 py-4 text-left text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
+                >
+                  <span>Mujeres</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setMenuGender(null)}
+                  className="flex items-center gap-2 border-b border-tinta/5 py-4 text-left text-xs font-semibold uppercase tracking-[0.14em] text-tinta/60"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                    <path d="m15 6-6 6 6 6" />
+                  </svg>
+                  <span>{menuGender === "hombres" ? "Hombres" : "Mujeres"}</span>
+                </button>
+                {categories
+                  .filter((c) => c.slug)
+                  .map((c) => (
+                    <Link
+                      key={c.slug}
+                      href={`/tienda?cat=${c.slug}&gender=${menuGender}`}
+                      onClick={() => setOpen(false)}
+                      className="border-b border-tinta/5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
+                    >
+                      {c.label}
+                    </Link>
+                  ))}
+              </>
+            )}
             {isDev && (
               <Link
                 href="/admin/ventas"

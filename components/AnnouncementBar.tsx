@@ -36,7 +36,7 @@ export default function AnnouncementBar() {
 
   const items = [
     "Envíos a todo el país",
-    "Juan Manuel de Rosas 720 · Chascomús",
+    "Juan Manuel de Rosas 715 · Chascomús",
   ];
   const loop = Array.from({ length: 6 }).flatMap(() => items);
 

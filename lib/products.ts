@@ -15,6 +15,7 @@ export type Product = {
   description: string | null;
   price: number;
   category: string | null;
+  gender: string | null;
   images: string[];
   active: boolean;
   variants: Variant[];
@@ -39,15 +40,19 @@ export async function getFeaturedProducts(): Promise<Product[]> {
   return (data as Product[] | null) ?? [];
 }
 
-export async function getAllProducts(category?: string): Promise<Product[]> {
+export async function getAllProducts(
+  category?: string,
+  gender?: string
+): Promise<Product[]> {
   noStore();
   if (!hasSupabase()) return [];
   const supabase = createServiceClient();
-  const base = supabase
+  let query = supabase
     .from("products")
     .select("*, variants:product_variants(*)")
     .eq("active", true);
-  const query = category ? base.eq("category", category) : base;
+  if (category) query = query.eq("category", category);
+  if (gender) query = query.eq("gender", gender);
   const { data, error } = await query;
   if (error) console.error("getAllProducts", error);
   return (data as Product[] | null) ?? [];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Cropper from "react-easy-crop";
 
@@ -14,12 +14,20 @@ export default function ProductForm() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [removeBg, setRemoveBg] = useState(false);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState<string>("camperas");
+  const [gender, setGender] = useState<"hombres" | "mujeres">("hombres");
+
+  useEffect(() => {
+    try {
+      const c = localStorage.getItem("rossi-last-cat");
+      if (c) setCategory(c);
+      const g = localStorage.getItem("rossi-last-gender");
+      if (g === "hombres" || g === "mujeres") setGender(g);
+    } catch {}
+  }, []);
   const [price, setPrice] = useState<string>("");
-  const [description, setDescription] = useState("");
   const [variants, setVariants] = useState<Variant[]>([
     { size: "", color: "", stock: 1 },
   ]);
@@ -52,7 +60,7 @@ export default function ProductForm() {
         canvas.toBlob(
           (b) => res(new File([b!], file.name, { type: "image/jpeg" })),
           "image/jpeg",
-          0.9
+          0.82
         );
       };
       img.src = URL.createObjectURL(file);
@@ -64,33 +72,9 @@ export default function ProductForm() {
       setPhotoPreview(null);
       return;
     }
-    const resized = await resizeImage(f, 1024);
-    if (removeBg) {
-      setLoading("Quitando fondo...");
-      try {
-        const url = "https://esm.sh/@imgly/background-removal@1.7.0";
-        const mod = await import(/* webpackIgnore: true */ /* @vite-ignore */ url);
-        const removeBackground = (mod as { removeBackground: (input: Blob, cfg?: unknown) => Promise<Blob> }).removeBackground;
-        const cutoutBlob = await removeBackground(resized, {
-          model: "isnet",
-          output: { format: "image/png", quality: 0.9 },
-        });
-        const finalFile = new File([cutoutBlob], f.name.replace(/\.[^.]+$/, "") + ".png", {
-          type: "image/png",
-        });
-        setPhoto(finalFile);
-        setPhotoPreview(URL.createObjectURL(finalFile));
-      } catch {
-        setPhoto(resized);
-        setPhotoPreview(URL.createObjectURL(resized));
-        setMsg("No se pudo quitar el fondo, se usa la foto original");
-      } finally {
-        setLoading(null);
-      }
-    } else {
-      setPhoto(resized);
-      setPhotoPreview(URL.createObjectURL(resized));
-    }
+    const resized = await resizeImage(f, 900);
+    setPhoto(resized);
+    setPhotoPreview(URL.createObjectURL(resized));
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setCropping(true);
@@ -116,11 +100,17 @@ export default function ProductForm() {
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
     ctx.drawImage(img, x, y, width, height, 0, 0, width, height);
     const blob: Blob = await new Promise((res) =>
-      canvas.toBlob((b) => res(b!), "image/png")
+      canvas.toBlob((b) => res(b!), "image/jpeg", 0.85)
     );
-    const cropped = new File([blob], photo.name, { type: "image/png" });
+    const cropped = new File(
+      [blob],
+      photo.name.replace(/\.[^.]+$/, "") + ".jpg",
+      { type: "image/jpeg" }
+    );
     setPhoto(cropped);
     setPhotoPreview(URL.createObjectURL(cropped));
     setCropping(false);
@@ -184,7 +174,6 @@ export default function ProductForm() {
           if (d.name) setName(d.name);
           if (d.category && CATEGORIES.includes(d.category)) setCategory(d.category);
           if (d.price) setPrice(String(d.price));
-          if (d.description) setDescription(d.description);
           if (Array.isArray(d.variants) && d.variants.length) setVariants(d.variants);
           setLoading(null);
         } catch (e) {
@@ -228,9 +217,14 @@ export default function ProductForm() {
       const fd = new FormData();
       fd.append("name", name);
       fd.append("slug", `${slug}-${Date.now().toString(36)}`);
-      fd.append("description", description);
-      fd.append("price", String(Number(price)));
+      fd.append("description", "");
+      fd.append("price", String(Math.ceil((Number(price) * 1.1) / 1000) * 1000));
       fd.append("category", category);
+      fd.append("gender", gender);
+      try {
+        localStorage.setItem("rossi-last-cat", category);
+        localStorage.setItem("rossi-last-gender", gender);
+      } catch {}
       fd.append("variants", JSON.stringify(variants));
       fd.append("photo", photo);
       const r = await fetch("/api/products", { method: "POST", body: fd });
@@ -242,7 +236,6 @@ export default function ProductForm() {
       setPhotoPreview(null);
       setName("");
       setPrice("");
-      setDescription("");
       setVariants([{ size: "", color: "", stock: 1 }]);
       setLoading(null);
     } catch (e) {
@@ -298,38 +291,46 @@ export default function ProductForm() {
         onChange={(e) => onPhoto(e.target.files?.[0] ?? null)}
       />
 
-      <label className="flex cursor-pointer items-center justify-between rounded-full border border-tinta/25 bg-white px-4 py-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-tinta">
-          Quitar fondo
-        </span>
+      <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
-          onClick={() => setRemoveBg((v) => !v)}
-          className={`relative h-5 w-9 rounded-full transition ${removeBg ? "bg-celeste-500" : "bg-tinta/20"}`}
-          aria-pressed={removeBg}
+          onClick={() => setGender("hombres")}
+          className={`h-11 rounded-full border text-[11px] font-bold uppercase tracking-wider transition ${
+            gender === "hombres"
+              ? "border-celeste-500 bg-celeste-500 text-white"
+              : "border-tinta/25 bg-white text-tinta"
+          }`}
         >
-          <span
-            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${removeBg ? "left-[18px]" : "left-0.5"}`}
-          />
+          Hombres
         </button>
-      </label>
-
-      <textarea
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="Descripción"
-        rows={2}
-        className="w-full resize-none rounded-2xl border border-tinta/25 bg-white p-3 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
-      />
+        <button
+          type="button"
+          onClick={() => setGender("mujeres")}
+          className={`h-11 rounded-full border text-[11px] font-bold uppercase tracking-wider transition ${
+            gender === "mujeres"
+              ? "border-celeste-500 bg-celeste-500 text-white"
+              : "border-tinta/25 bg-white text-tinta"
+          }`}
+        >
+          Mujeres
+        </button>
+      </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <input
-          type="number"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          placeholder="Precio"
-          className="h-11 w-full rounded-full border border-tinta/25 bg-white px-4 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
-        />
+        <div className="relative">
+          <input
+            type="number"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="Precio"
+            className="h-11 w-full rounded-full border border-tinta/25 bg-white px-4 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+          />
+          {price && Number(price) > 0 && (
+            <span className="pointer-events-none absolute -bottom-7 left-0 whitespace-nowrap text-sm font-bold uppercase tracking-wider text-celeste-600">
+              Final +10%: ${Math.ceil((Number(price) * 1.1) / 1000) * 1000}
+            </span>
+          )}
+        </div>
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
@@ -343,7 +344,7 @@ export default function ProductForm() {
         </select>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2 pt-6">
         {variants.map((v, i) => (
           <div key={i} className="flex gap-1.5">
             <input
@@ -392,7 +393,7 @@ export default function ProductForm() {
       {msg && <p className="text-center text-xs text-tinta/70">{msg}</p>}
 
       {cropping && photoPreview && (
-        <div className="fixed inset-0 z-[80] flex flex-col bg-black">
+        <div className="fixed inset-0 z-[80] flex flex-col bg-white">
           <div className="relative flex-1">
             <Cropper
               image={photoPreview}
@@ -403,6 +404,14 @@ export default function ProductForm() {
               onZoomChange={setZoom}
               onCropComplete={onCropComplete}
               restrictPosition={false}
+              style={{
+                containerStyle: { background: "#ffffff" },
+                cropAreaStyle: {
+                  border: "1px solid rgba(0,0,0,0.15)",
+                  color: "rgba(255,255,255,0)",
+                  boxShadow: "0 0 0 9999px rgba(255,255,255,1)",
+                },
+              }}
             />
           </div>
           <div className="flex items-center gap-3 bg-white p-4">

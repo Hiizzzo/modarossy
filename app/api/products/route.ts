@@ -11,6 +11,7 @@ export async function POST(req: Request) {
     const description = String(form.get("description") || "");
     const price = Number(form.get("price") || 0);
     const category = String(form.get("category") || "");
+    const gender = String(form.get("gender") || "");
     const variantsRaw = String(form.get("variants") || "[]");
     const photo = form.get("photo") as File | null;
 
@@ -20,43 +21,49 @@ export async function POST(req: Request) {
 
     const supabase = createServiceClient();
 
-    const { data: product, error } = await supabase
-      .from("products")
-      .insert({ name, slug, description, price, category, images: [], active: true })
-      .select("id")
-      .single();
-    if (error) throw error;
-
-    const path = `${product.id}/${Date.now()}-${photo.name}`;
+    const id = crypto.randomUUID();
+    const path = `${id}/${Date.now()}-${photo.name}`;
+    const publicUrl = supabase.storage.from("product-images").getPublicUrl(path).data.publicUrl;
     const buf = Buffer.from(await photo.arrayBuffer());
-    const { error: upErr } = await supabase.storage
-      .from("product-images")
-      .upload(path, buf, { contentType: photo.type, upsert: false });
-    if (upErr) throw upErr;
-
-    const { data: pub } = supabase.storage.from("product-images").getPublicUrl(path);
-    await supabase
-      .from("products")
-      .update({ images: [pub.publicUrl] })
-      .eq("id", product.id);
-
     const variants = JSON.parse(variantsRaw) as Array<{
       size: string;
       color: string;
       stock: number;
     }>;
-    if (variants.length) {
-      await supabase.from("product_variants").insert(
-        variants.map((v) => ({
-          product_id: product.id,
-          size: v.size || null,
-          color: v.color || null,
-          stock: v.stock,
-        }))
-      );
-    }
 
-    return NextResponse.json({ id: product.id });
+    const insertRes = await supabase.from("products").insert({
+      id,
+      name,
+      slug,
+      description,
+      price,
+      category,
+      gender: gender || null,
+      images: [publicUrl],
+      active: true,
+    });
+    if (insertRes.error) throw insertRes.error;
+
+    const [upRes, varRes] = await Promise.all([
+      supabase.storage
+        .from("product-images")
+        .upload(path, buf, { contentType: photo.type, upsert: true }),
+      variants.length
+        ? supabase.from("product_variants").insert(
+            variants.map((v) => ({
+              product_id: id,
+              size: v.size || null,
+              color: v.color || null,
+              stock: v.stock,
+            }))
+          )
+        : Promise.resolve({ error: null }),
+    ]);
+
+    if (upRes.error) throw upRes.error;
+    if (varRes.error) throw varRes.error;
+
+    return NextResponse.json({ id });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
     return NextResponse.json({ error: msg }, { status: 500 });

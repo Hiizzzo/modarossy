@@ -175,7 +175,7 @@ export default function ProductGrid({ products }: { products: Product[] }) {
                   e.preventDefault();
                   if (isDev) {
                     const now = Date.now();
-                    if (lastTap.current.id === p.id && now - lastTap.current.t < 400) {
+                    if (lastTap.current.id === p.id && now - lastTap.current.t < 280) {
                       setEditing(p);
                       lastTap.current = { id: null, t: 0 };
                     } else {
@@ -188,7 +188,7 @@ export default function ProductGrid({ products }: { products: Product[] }) {
                 draggable={false}
                 className="block"
               >
-                <h3 className="mb-1 text-center text-base font-bold leading-tight sm:text-lg">
+                <h3 className="mb-1 line-clamp-2 flex h-10 items-center justify-center text-center text-base font-bold leading-tight sm:h-12 sm:text-lg">
                   {p.name}
                 </h3>
                 <div className="relative aspect-square overflow-hidden bg-white">
@@ -206,7 +206,7 @@ export default function ProductGrid({ products }: { products: Product[] }) {
                     </div>
                   )}
                 </div>
-                <p className="mt-0.5 text-center text-xs font-bold">
+                <p className="mt-1 text-center text-sm font-bold sm:text-base">
                   {formatARS(p.price)}
                 </p>
               </Link>
@@ -216,7 +216,9 @@ export default function ProductGrid({ products }: { products: Product[] }) {
                 onClick={(e) => {
                   e.preventDefault();
                   const v = p.variants.find((x) => x.stock > 0) ?? p.variants[0];
-                  if (!v) return;
+                  const variantId = v?.id ?? p.id;
+                  const size = v?.size ?? undefined;
+                  const color = v?.color ?? undefined;
                   const card = (e.currentTarget as HTMLElement).closest("[data-product-card]");
                   const srcImg = card?.querySelector("img") as HTMLImageElement | null;
                   const target = document.querySelector("[data-cart-target]") as HTMLElement | null;
@@ -246,11 +248,11 @@ export default function ProductGrid({ products }: { products: Product[] }) {
                     }, 660);
                   }
                   addToCart({
-                    variantId: v.id,
+                    variantId,
                     productId: p.id,
                     name: p.name,
-                    size: v.size ?? undefined,
-                    color: v.color ?? undefined,
+                    size,
+                    color,
                     price: p.price,
                     image: p.images[0],
                     qty: 1,
