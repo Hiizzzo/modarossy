@@ -49,7 +49,7 @@ export default function Navbar() {
   const [pw, setPw] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const tapsRef = useRef<{ count: number; t: number }>({ count: 0, t: 0 });
+  const clicksRef = useRef<{ count: number; t: number }>({ count: 0, t: 0 });
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -67,7 +67,7 @@ export default function Navbar() {
     };
   }, [searchOpen]);
 
-  const GATE_PASSWORD = "jaimito1842";
+  const GATE_PASSWORD = "1842";
 
   const submitGate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,15 +81,21 @@ export default function Navbar() {
     }
   };
 
-  const secretTap = (e: React.MouseEvent) => {
+  const handleSecretClick = (e: React.MouseEvent) => {
+    if (isDev) return;
     const now = Date.now();
-    if (now - tapsRef.current.t > 1500) tapsRef.current.count = 0;
-    tapsRef.current.t = now;
-    tapsRef.current.count += 1;
-    if (tapsRef.current.count >= 8 && !isDev) {
+    if (now - clicksRef.current.t > 1000) {
+      clicksRef.current.count = 0;
+    }
+    clicksRef.current.t = now;
+    clicksRef.current.count += 1;
+
+    if (clicksRef.current.count >= 4) {
       e.preventDefault();
-      tapsRef.current.count = 0;
-      setGate(true);
+      e.stopPropagation();
+      clicksRef.current.count = 0;
+      setTimeout(() => setGate(true), 0);
+      return false;
     }
   };
 
@@ -133,7 +139,7 @@ export default function Navbar() {
             onClick={(e) => {
               setOpen(false);
               setSearchOpen(false);
-              secretTap(e);
+              handleSecretClick(e);
               if (typeof window !== "undefined" && window.location.pathname === "/tienda") {
                 e.preventDefault();
                 window.scrollTo({ top: 0, behavior: "smooth" });

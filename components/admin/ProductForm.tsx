@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Cropper from "react-easy-crop";
+import { removeBackground } from "@imgly/background-removal";
 
 const GROQ_KEY = process.env.NEXT_PUBLIC_GROQ_KEY || "";
 const CATEGORIES = ["camperas", "carteras", "zapatillas", "mochilas"];
@@ -38,6 +39,8 @@ export default function ProductForm() {
 
   const [loading, setLoading] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [processingTime, setProcessingTime] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [cropping, setCropping] = useState(false);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -92,6 +95,7 @@ export default function ProductForm() {
       setCropping(false);
       return;
     }
+    setLoading("Recortando...");
     const img = new Image();
     img.src = photoPreview;
     await new Promise((res) => (img.onload = res));
@@ -111,9 +115,51 @@ export default function ProductForm() {
       photo.name.replace(/\.[^.]+$/, "") + ".jpg",
       { type: "image/jpeg" }
     );
-    setPhoto(cropped);
-    setPhotoPreview(URL.createObjectURL(cropped));
+
+    // Remove background en Web Worker (no bloquea la UI)
+    setLoading("Quitando fondo...");
     setCropping(false);
+    setProcessingTime(0);
+    const startTime = Date.now();
+
+    // Contador que se actualiza cada 100ms
+    timerRef.current = setInterval(() => {
+      setProcessingTime((Date.now() - startTime) / 1000);
+    }, 100);
+
+    try {
+      // Resize a max 800px para procesar más rápido
+      const smallerForProcessing = await resizeImage(cropped, 800);
+
+      // Procesar directamente (sin worker por ahora)
+      const removed = await removeBackground(smallerForProcessing, {
+        model: 'isnet_quint8',
+        output: { quality: 0.8, type: "image/jpeg" },
+      });
+      const finalBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
+
+      const final = new File(
+        [finalBlob],
+        photo.name.replace(/\.[^.]+$/, "") + ".jpg",
+        { type: "image/jpeg" }
+      );
+
+      if (timerRef.current) clearInterval(timerRef.current);
+      const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      setPhoto(final);
+      setPhotoPreview(URL.createObjectURL(final));
+      setLoading(null);
+      setProcessingTime(0);
+      setMsg(`✓ Fondo removido en ${totalTime}s`);
+    } catch (e) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      setPhoto(cropped);
+      setPhotoPreview(URL.createObjectURL(cropped));
+      setLoading(null);
+      setProcessingTime(0);
+      setMsg("No se pudo quitar el fondo, usando imagen original");
+    }
   };
 
   const transcribe = async (blob: Blob): Promise<string> => {
@@ -251,7 +297,8 @@ export default function ProductForm() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Nombre del producto"
-          className="h-10 min-w-0 flex-1 rounded-full border border-tinta/25 bg-white px-4 text-sm font-semibold text-tinta placeholder:font-normal placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+          disabled={loading === "Guardando..."}
+          className="h-10 min-w-0 flex-1 rounded-full border border-tinta/25 bg-white px-4 text-sm font-semibold text-tinta placeholder:font-normal placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none disabled:opacity-50"
         />
         <button
           type="button"
@@ -265,24 +312,94 @@ export default function ProductForm() {
         </button>
       </div>
 
-      <button
-        type="button"
-        onClick={() => fileRef.current?.click()}
-        className="flex h-32 w-full items-center justify-center rounded-2xl border border-tinta/25 bg-white text-tinta transition hover:bg-celeste-50"
-      >
-        {photoPreview ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={photoPreview} alt="" className="h-full object-contain" />
-        ) : (
-          <div className="flex flex-col items-center gap-1">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M3 7h3l2-3h8l2 3h3v13H3z" />
-              <circle cx="12" cy="13" r="4" />
+      <div className="group relative">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="flex h-32 w-full items-center justify-center rounded-2xl border border-tinta/25 bg-white text-tinta transition hover:bg-celeste-50"
+        >
+          {photoPreview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photoPreview} alt="" className="h-full object-contain" />
+          ) : (
+            <div className="flex flex-col items-center gap-1">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M3 7h3l2-3h8l2 3h3v13H3z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+              <span className="text-[11px] font-semibold uppercase tracking-wider">Sacar o subir foto</span>
+            </div>
+          )}
+        </button>
+        {photoPreview && photo && msg?.includes("Fondo removido") && (
+          <button
+            type="button"
+            onClick={async () => {
+              setLoading("Reprocesando...");
+              setMsg(null);
+              try {
+                // Mismo proceso de applyCrop
+                const resized = await resizeImage(photo, 900);
+                const img = new Image();
+                img.src = URL.createObjectURL(resized);
+                await new Promise(res => img.onload = res);
+
+                const targetRatio = 4 / 5;
+                const imgRatio = img.width / img.height;
+                let cropWidth = img.width;
+                let cropHeight = img.height;
+
+                if (imgRatio > targetRatio) {
+                  cropWidth = img.height * targetRatio;
+                } else {
+                  cropHeight = img.width / targetRatio;
+                }
+
+                const x = (img.width - cropWidth) / 2;
+                const y = (img.height - cropHeight) / 2;
+
+                const canvas = document.createElement("canvas");
+                canvas.width = cropWidth;
+                canvas.height = cropHeight;
+                const ctx = canvas.getContext("2d")!;
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, cropWidth, cropHeight);
+                ctx.drawImage(img, x, y, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+
+                const croppedBlob: Blob = await new Promise(res =>
+                  canvas.toBlob(b => res(b!), "image/jpeg", 0.85)
+                );
+
+                const smallerForProcessing = await resizeImage(
+                  new File([croppedBlob], photo.name, { type: "image/jpeg" }),
+                  800
+                );
+
+                const removed = await removeBackground(smallerForProcessing, {
+                  model: 'isnet_quint8',
+                  output: { quality: 0.8, type: "image/jpeg" },
+                });
+                const finalBlob = removed instanceof Blob ? removed : await (await fetch(removed as string)).blob();
+                const final = new File([finalBlob], photo.name, { type: "image/jpeg" });
+
+                setPhoto(final);
+                setPhotoPreview(URL.createObjectURL(final));
+                setLoading(null);
+                setMsg("✓ Reprocesado");
+              } catch (e) {
+                setLoading(null);
+                setMsg("Error al reprocesar");
+              }
+            }}
+            className="absolute left-2 top-2 hidden rounded-full bg-celeste-500 p-2 text-white opacity-0 shadow-lg transition group-hover:block group-hover:opacity-100"
+            title="Reintentar quitar fondo"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
             </svg>
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Sacar o subir foto</span>
-          </div>
+          </button>
         )}
-      </button>
+      </div>
       <input
         ref={fileRef}
         type="file"
@@ -295,7 +412,8 @@ export default function ProductForm() {
         <button
           type="button"
           onClick={() => setGender("hombres")}
-          className={`h-11 rounded-full border text-[11px] font-bold uppercase tracking-wider transition ${
+          disabled={loading === "Guardando..."}
+          className={`h-11 rounded-full border text-[11px] font-bold uppercase tracking-wider transition disabled:opacity-50 ${
             gender === "hombres"
               ? "border-celeste-500 bg-celeste-500 text-white"
               : "border-tinta/25 bg-white text-tinta"
@@ -306,7 +424,8 @@ export default function ProductForm() {
         <button
           type="button"
           onClick={() => setGender("mujeres")}
-          className={`h-11 rounded-full border text-[11px] font-bold uppercase tracking-wider transition ${
+          disabled={loading === "Guardando..."}
+          className={`h-11 rounded-full border text-[11px] font-bold uppercase tracking-wider transition disabled:opacity-50 ${
             gender === "mujeres"
               ? "border-celeste-500 bg-celeste-500 text-white"
               : "border-tinta/25 bg-white text-tinta"
@@ -323,7 +442,8 @@ export default function ProductForm() {
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             placeholder="Precio"
-            className="h-11 w-full rounded-full border border-tinta/25 bg-white px-4 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+            disabled={loading === "Guardando..."}
+            className="h-11 w-full rounded-full border border-tinta/25 bg-white px-4 text-sm text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none disabled:opacity-50"
           />
           {price && Number(price) > 0 && (
             <span className="pointer-events-none absolute -bottom-7 left-0 whitespace-nowrap text-sm font-bold uppercase tracking-wider text-celeste-600">
@@ -334,7 +454,8 @@ export default function ProductForm() {
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="h-11 w-full rounded-full border border-tinta/25 bg-white px-4 text-sm text-tinta focus:border-celeste-500 focus:outline-none"
+          disabled={loading === "Guardando..."}
+          className="h-11 w-full rounded-full border border-tinta/25 bg-white px-4 text-sm text-tinta focus:border-celeste-500 focus:outline-none disabled:opacity-50"
         >
           {CATEGORIES.map((c) => (
             <option key={c} value={c}>
@@ -389,6 +510,12 @@ export default function ProductForm() {
       >
         {loading || "Guardar producto"}
       </button>
+
+      {loading === "Quitando fondo..." && processingTime > 0 && (
+        <p className="text-center text-sm font-bold text-celeste-600">
+          {processingTime.toFixed(1)}s
+        </p>
+      )}
 
       {msg && <p className="text-center text-xs text-tinta/70">{msg}</p>}
 

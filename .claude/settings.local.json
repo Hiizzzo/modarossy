@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:ciconceptstore.com)"
+      "WebFetch(domain:ciconceptstore.com)",
+      "WebSearch",
+      "WebFetch(domain:www.mercadopago.com.ar)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
