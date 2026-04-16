@@ -1,19 +1,20 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { useDev } from "@/lib/dev-store";
+import CreateProductSheet from "./CreateProductSheet";
 
 export default function AnnouncementBar() {
   const isDev = useDev((s) => s.isDev);
-  const pathname = usePathname();
-  const onNuevo = pathname === "/admin/productos/nuevo";
+  const [showCreate, setShowCreate] = useState(false);
 
   if (isDev) {
     return (
-      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-center bg-celeste-500 py-2 text-white">
-        {!onNuevo && (
-          <a
-            href="/admin/productos/nuevo"
+      <>
+        <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-center bg-celeste-500 py-2 text-white">
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
             aria-label="Agregar producto"
             className="flex items-center gap-3 text-white transition active:scale-95"
           >
@@ -23,14 +24,10 @@ export default function AnnouncementBar() {
             <span className="text-lg font-bold uppercase tracking-[0.2em]">
               Agregar producto
             </span>
-          </a>
-        )}
-        {onNuevo && (
-          <span className="text-lg font-bold uppercase tracking-[0.2em]">
-            Modo edición
-          </span>
-        )}
-      </div>
+          </button>
+        </div>
+        {showCreate && <CreateProductSheet onClose={() => setShowCreate(false)} />}
+      </>
     );
   }
 

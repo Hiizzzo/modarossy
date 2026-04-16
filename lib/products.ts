@@ -53,7 +53,10 @@ export async function getAllProducts(
     .select("*, variants:product_variants(*)")
     .eq("active", true);
   if (category) query = query.eq("category", category);
-  if (gender) query = query.eq("gender", gender);
+  if (gender) {
+    // Incluir productos del género específico Y productos unisex (gender: null)
+    query = query.or(`gender.eq.${gender},gender.is.null`);
+  }
   const { data, error } = await query;
   if (error) console.error("getAllProducts", error);
   return (data as Product[] | null) ?? [];
