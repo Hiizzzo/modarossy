@@ -39,7 +39,7 @@ interface ProductFormSharedProps {
   product?: Product;
   onSuccess?: () => void;
   onCancel?: () => void;
-  customButtons?: React.ReactNode;
+  customButtons?: React.ReactNode | ((props: { save: () => Promise<void>; loading: string | null }) => React.ReactNode);
 }
 
 export default function ProductFormShared({
