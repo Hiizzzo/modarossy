@@ -51,7 +51,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
       // Subir fotos nuevas y obtener URLs
       const photoUrls = new Map<string, string>();
-      const photoKeys = new Set(variants.map((v: { photoKey: string }) => v.photoKey));
+      const photoKeys = new Set<string>(variants.map((v: { photoKey: string }) => v.photoKey));
 
       for (const key of photoKeys) {
         const photo = fd.get(`photo_${key}`) as File | null;
