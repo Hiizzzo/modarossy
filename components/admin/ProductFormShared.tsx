@@ -164,7 +164,11 @@ export default function ProductFormShared({
     setGroups((gs) => gs.map((g) => (g.key === key ? { ...g, ...patch } : g)));
 
   const addGroup = () => {
-    setGroups((gs) => [...gs, newGroup()]);
+    setGroups((gs) => {
+      const used = new Set(gs.map((g) => g.colorSlug));
+      const firstFree = COLORS.find((c) => !used.has(c.slug))?.slug ?? COLORS[0].slug;
+      return [...gs, { ...newGroup(), colorSlug: firstFree }];
+    });
   };
 
   const removeGroup = (key: string) => {
