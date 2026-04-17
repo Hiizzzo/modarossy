@@ -246,11 +246,35 @@ export default function ProductFormShared({
       group.photo.name.replace(/\.[^.]+$/, "") + ".jpg",
       { type: "image/jpeg" }
     );
-    updateGroup(key, {
-      photo: cropped,
-      photoPreview: URL.createObjectURL(cropped),
-    });
     setCroppingKey(null);
+    setLoading("Eliminando fondo...");
+    try {
+      const fd = new FormData();
+      fd.append("image", cropped);
+      const res = await fetch("/api/bg-remove", { method: "POST", body: fd });
+      if (res.ok) {
+        const out = await res.blob();
+        const noBg = new File(
+          [out],
+          cropped.name.replace(/\.[^.]+$/, "") + ".jpg",
+          { type: "image/jpeg" }
+        );
+        updateGroup(key, {
+          photo: noBg,
+          photoPreview: URL.createObjectURL(noBg),
+        });
+      } else {
+        updateGroup(key, {
+          photo: cropped,
+          photoPreview: URL.createObjectURL(cropped),
+        });
+      }
+    } catch {
+      updateGroup(key, {
+        photo: cropped,
+        photoPreview: URL.createObjectURL(cropped),
+      });
+    }
     setLoading(null);
   };
 
