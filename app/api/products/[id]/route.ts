@@ -101,12 +101,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         console.log("[PATCH] inserted rows:", JSON.stringify(insData, null, 2));
       }
 
-      // Actualizar imagen principal del producto con la primera foto
-      const firstImageUrl = photoUrls.values().next().value;
-      if (firstImageUrl) {
+      // La imagen principal del producto = la de la PRIMERA variante (new o existente)
+      const firstVariant = variantRows[0];
+      if (firstVariant?.image_url) {
         await supabase
           .from("products")
-          .update({ images: [firstImageUrl] })
+          .update({ images: [firstVariant.image_url] })
           .eq("id", params.id);
       }
     }
