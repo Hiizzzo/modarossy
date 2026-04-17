@@ -56,7 +56,9 @@ export default function ProductFormShared({
   const [gender, setGender] = useState<"hombres" | "mujeres" | null>(
     (product?.gender as "hombres" | "mujeres" | null) ?? "hombres"
   );
-  const [price, setPrice] = useState<string>(product ? String(product.price) : "");
+  const [price, setPrice] = useState<string>(
+    product ? String(Math.floor(product.price / 1.1 / 1000) * 1000) : ""
+  );
 
   const [groups, setGroups] = useState<ColorGroup[]>(() => {
     if (mode === "edit" && product) {
