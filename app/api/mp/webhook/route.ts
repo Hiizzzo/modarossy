@@ -73,7 +73,8 @@ export async function POST(req: Request) {
         if (
           fullOrder?.shipping_option &&
           !fullOrder.zipnova_shipment_id &&
-          process.env.ZIPNOVA_API_KEY
+          process.env.ZIPNOVA_API_KEY &&
+          process.env.ZIPNOVA_AUTO_CREATE === "true"
         ) {
           try {
             const option = fullOrder.shipping_option as ShippingOption;
