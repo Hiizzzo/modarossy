@@ -8,6 +8,7 @@ type VariantInput = {
   color: string;
   stock: number;
   photoKey?: string;
+  existingImageUrl?: string | null;
 };
 
 export async function POST(req: Request) {
@@ -93,6 +94,8 @@ export async function POST(req: Request) {
       size: v.size || null,
       color: v.color || null,
       stock: v.stock,
+      image_url:
+        (v.photoKey && urls.get(v.photoKey)) || v.existingImageUrl || null,
     }));
 
     const [uploadsRes, varRes] = await Promise.all([

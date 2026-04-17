@@ -73,18 +73,32 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       await supabase.from("product_variants").delete().eq("product_id", params.id);
 
       // Crear todas las variantes de nuevo
-      const variantRows = variants.map((v: { size: string; color: string; stock: number }) => ({
+      type VariantIn = {
+        size: string;
+        color: string;
+        stock: number;
+        photoKey?: string;
+        existingImageUrl?: string | null;
+      };
+      const variantRows = (variants as VariantIn[]).map((v) => ({
         product_id: params.id,
         size: v.size || null,
         color: v.color || null,
         stock: v.stock,
+        image_url:
+          (v.photoKey && photoUrls.get(v.photoKey)) ||
+          v.existingImageUrl ||
+          null,
       }));
 
+      console.log("[PATCH] variantRows to insert:", JSON.stringify(variantRows, null, 2));
       if (variantRows.length > 0) {
-        const { error: varErr } = await supabase
+        const { error: varErr, data: insData } = await supabase
           .from("product_variants")
-          .insert(variantRows);
+          .insert(variantRows)
+          .select();
         if (varErr) throw varErr;
+        console.log("[PATCH] inserted rows:", JSON.stringify(insData, null, 2));
       }
 
       // Actualizar imagen principal del producto con la primera foto
