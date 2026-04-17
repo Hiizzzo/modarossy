@@ -47,7 +47,8 @@ const statusColor: Record<string, string> = {
 };
 
 export default async function VentasPage() {
-  const orders = await getOrders();
+  const allOrders = await getOrders();
+  const orders = allOrders.filter((o) => o.status !== "pending");
   const paid = orders.filter(
     (o) => o.status === "approved" || o.status === "paid"
   );
@@ -78,10 +79,10 @@ export default async function VentasPage() {
     <div className="space-y-4 px-3 pb-20 pt-4 sm:px-6">
       <div>
         <Link
-          href="/admin"
+          href="/tienda"
           className="text-[10px] font-semibold uppercase tracking-[0.12em] text-tinta/60"
         >
-          ← Productos
+          ← Tienda
         </Link>
         <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Ventas</h1>
       </div>

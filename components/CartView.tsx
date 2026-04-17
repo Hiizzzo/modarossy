@@ -4,23 +4,56 @@ import { useState } from "react";
 import Link from "next/link";
 import { useCart } from "@/lib/cart-store";
 import { formatARS } from "@/lib/format";
+import { PROVINCES } from "@/lib/provinces";
+import type { ShippingOption } from "@/lib/shipping-types";
 
 export default function CartView() {
   const { items, remove, setQty, total } = useCart();
   const [form, setForm] = useState({
-    name: "Test Buyer",
-    email: "test@test.com",
-    phone: "1111111111",
-    address: "Calle Test 123",
-    city: "Chascomús",
-    zip: "7130",
+    name: "",
+    email: "",
+    phone: "",
+    street: "",
+    street_number: "",
+    city: "",
+    state: "",
+    zip: "",
+    document: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState<"cart" | "shipping">("cart");
+  const [step, setStep] = useState<"cart" | "shipping" | "options">("cart");
 
-  const canCheckout =
-    form.name && form.email && form.address && form.city && form.zip;
+  const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
+  const [selectedOption, setSelectedOption] = useState<ShippingOption | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+
+  const canQuote =
+    form.name && form.email && form.street && form.street_number && form.city && form.state && form.zip && form.document;
+
+  const onQuote = async () => {
+    setQuoteLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/shipping/quote", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          items,
+          destination: { city: form.city, state: form.state, zipcode: form.zip },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error cotizando envío");
+      setShippingOptions(data.options);
+      setSelectedOption(null);
+      setStep("options");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally {
+      setQuoteLoading(false);
+    }
+  };
 
   const onPay = async () => {
     setLoading(true);
@@ -29,7 +62,11 @@ export default function CartView() {
       const res = await fetch("/api/mp/create-preference", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ items, customer: form }),
+        body: JSON.stringify({
+          items,
+          customer: form,
+          shippingOption: selectedOption,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error creando pago");
@@ -68,6 +105,115 @@ export default function CartView() {
     );
   }
 
+  /* ── Step: Opciones de envío ── */
+  if (step === "options") {
+    const shippingCost = selectedOption?.price ?? 0;
+    const grandTotal = total() + shippingCost;
+
+    return (
+      <div className="mx-auto w-full max-w-sm space-y-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setStep("shipping")}
+            aria-label="Volver"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-tinta hover:bg-tinta/5"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+          </button>
+          <h1 className="text-xl font-bold tracking-tight">Opciones de envío</h1>
+        </div>
+
+        {shippingOptions.length === 0 ? (
+          <p className="py-8 text-center text-sm text-tinta/60">
+            No se encontraron opciones de envío para esta dirección.
+          </p>
+        ) : (
+          <ul className="space-y-1.5 pt-1">
+            {shippingOptions.map((opt) => {
+              const isSelected = selectedOption?.id === opt.id;
+              return (
+                <li key={opt.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOption(opt)}
+                    className={`flex w-full items-center gap-3 rounded-2xl border-2 bg-white p-3 text-left transition ${
+                      isSelected
+                        ? "border-celeste-500 ring-1 ring-celeste-500"
+                        : "border-transparent hover:border-tinta/10"
+                    }`}
+                  >
+                    {opt.carrierLogo && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={opt.carrierLogo}
+                        alt={opt.carrierName}
+                        className="h-8 w-8 shrink-0 rounded object-contain"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-bold text-tinta">
+                          {opt.carrierName}
+                        </span>
+                        {opt.tags.includes("cheapest") && (
+                          <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                            Más barato
+                          </span>
+                        )}
+                        {opt.tags.includes("fastest") && (
+                          <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                            Más rápido
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-tinta/60">
+                        {opt.serviceName} · {opt.deliveryMin}-{opt.deliveryMax} días hábiles
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-sm font-bold text-tinta">
+                      {formatARS(opt.price)}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {error && <p className="text-center text-xs text-red-500">{error}</p>}
+
+        <div className="space-y-0.5 px-2 pt-1">
+          <div className="flex items-center justify-between text-xs text-tinta/60">
+            <span>Productos</span>
+            <span>{formatARS(total())}</span>
+          </div>
+          {shippingCost > 0 && (
+            <div className="flex items-center justify-between text-xs text-tinta/60">
+              <span>Envío</span>
+              <span>{formatARS(shippingCost)}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between text-sm pt-1">
+            <span className="font-semibold uppercase tracking-wider text-tinta/70">Total</span>
+            <span className="text-base font-bold text-tinta">{formatARS(grandTotal)}</span>
+          </div>
+        </div>
+
+        <button
+          onClick={onPay}
+          disabled={!selectedOption || loading}
+          className="w-full rounded-full bg-tinta py-3 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-celeste-500 disabled:opacity-40"
+        >
+          {loading ? "Procesando..." : "Pagar"}
+        </button>
+      </div>
+    );
+  }
+
+  /* ── Step: Datos de envío ── */
   if (step === "shipping") {
     return (
       <div className="mx-auto w-full max-w-sm space-y-2">
@@ -86,44 +232,89 @@ export default function CartView() {
         </div>
 
         <div className="grid grid-cols-2 gap-1.5 pt-1">
-          {(
-            [
-              ["name", "Nombre y apellido", "col-span-2"],
-              ["email", "Email", "col-span-2"],
-              ["phone", "Teléfono", ""],
-              ["zip", "Código postal", ""],
-              ["address", "Dirección", "col-span-2"],
-              ["city", "Ciudad", "col-span-2"],
-            ] as const
-          ).map(([key, label, span]) => (
-            <input
-              key={key}
-              placeholder={label}
-              value={form[key]}
-              onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-              className={`h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none ${span}`}
-            />
-          ))}
+          <input
+            placeholder="Nombre y apellido"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className="col-span-2 h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+          />
+          <input
+            placeholder="Email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            className="col-span-2 h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+          />
+          <input
+            placeholder="Teléfono"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            className="h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+          />
+          <input
+            placeholder="DNI / CUIT"
+            value={form.document}
+            onChange={(e) => setForm({ ...form, document: e.target.value })}
+            className="h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+          />
+          <input
+            placeholder="Calle"
+            value={form.street}
+            onChange={(e) => setForm({ ...form, street: e.target.value })}
+            className="col-span-2 h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+          />
+          <input
+            placeholder="Número"
+            value={form.street_number}
+            onChange={(e) => setForm({ ...form, street_number: e.target.value })}
+            className="h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+          />
+          <input
+            placeholder="Código postal"
+            value={form.zip}
+            onChange={(e) => setForm({ ...form, zip: e.target.value })}
+            className="h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+          />
+          <input
+            placeholder="Ciudad"
+            value={form.city}
+            onChange={(e) => setForm({ ...form, city: e.target.value })}
+            className="col-span-2 h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
+          />
+          <select
+            value={form.state}
+            onChange={(e) => setForm({ ...form, state: e.target.value })}
+            className="col-span-2 h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta focus:border-celeste-500 focus:outline-none"
+          >
+            <option value="" disabled>
+              Provincia
+            </option>
+            {PROVINCES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
         </div>
 
         {error && <p className="text-center text-xs text-red-500">{error}</p>}
 
         <div className="flex items-center justify-between px-2 pt-1 text-sm">
-          <span className="font-semibold uppercase tracking-wider text-tinta/70">Total</span>
+          <span className="font-semibold uppercase tracking-wider text-tinta/70">Subtotal</span>
           <span className="text-base font-bold text-tinta">{formatARS(total())}</span>
         </div>
 
         <button
-          onClick={onPay}
-          disabled={!canCheckout || loading}
+          onClick={onQuote}
+          disabled={!canQuote || quoteLoading}
           className="w-full rounded-full bg-tinta py-3 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-celeste-500 disabled:opacity-40"
         >
-          {loading ? "Procesando..." : "Pagar"}
+          {quoteLoading ? "Cotizando..." : "Ver opciones de envío"}
         </button>
       </div>
     );
   }
 
+  /* ── Step: Carrito ── */
   return (
     <div className="mx-auto w-full max-w-sm space-y-2">
       <h1 className="text-3xl font-bold tracking-tight">Tu carrito</h1>
@@ -197,13 +388,11 @@ export default function CartView() {
       </div>
 
       <button
-        onClick={onPay}
-        disabled={loading}
+        onClick={() => setStep("shipping")}
         className="w-full rounded-full bg-tinta py-3 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-celeste-500 disabled:opacity-40"
       >
-        {loading ? "Procesando..." : "Finalizar compra"}
+        Finalizar compra
       </button>
-      {error && <p className="text-center text-xs text-red-500">{error}</p>}
     </div>
   );
 }

@@ -114,7 +114,7 @@ export default function Navbar() {
     setAsking(false);
     setEmail("");
     setPw("");
-    window.location.href = "/admin";
+    window.location.href = "/tienda";
   };
 
   return (

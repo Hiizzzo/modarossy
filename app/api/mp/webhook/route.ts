@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { payment } from "@/lib/mercadopago";
 import { createServiceClient } from "@/lib/supabase/server";
+import {
+  createShipment,
+  DEFAULT_WEIGHT_GRAMS,
+  DEFAULT_HEIGHT_CM,
+  DEFAULT_WIDTH_CM,
+  DEFAULT_LENGTH_CM,
+} from "@/lib/zipnova";
+import type { ShippingOption } from "@/lib/shipping-types";
+import type { CartItem } from "@/lib/cart-store";
 
 export async function POST(req: Request) {
   try {
@@ -53,6 +62,92 @@ export async function POST(req: Request) {
             mp_payment_id: String(paymentId),
           })
           .eq("id", orderId);
+
+        // Create Zipnova shipment if shipping was selected
+        const { data: fullOrder } = await supabase
+          .from("orders")
+          .select("*")
+          .eq("id", orderId)
+          .maybeSingle();
+
+        if (
+          fullOrder?.shipping_option &&
+          !fullOrder.zipnova_shipment_id &&
+          process.env.ZIPNOVA_API_KEY
+        ) {
+          try {
+            const option = fullOrder.shipping_option as ShippingOption;
+            const customer = fullOrder.customer as {
+              name: string;
+              email: string;
+              phone?: string;
+              street: string;
+              street_number: string;
+              city: string;
+              state: string;
+              zip: string;
+              document: string;
+            };
+            const orderItems = fullOrder.items as CartItem[];
+
+            // Fetch product dimensions
+            const productIds = [
+              ...new Set(orderItems.map((i) => i.productId)),
+            ];
+            const { data: products } = await supabase
+              .from("products")
+              .select("id, weight_grams, height_cm, width_cm, length_cm")
+              .in("id", productIds);
+
+            const productMap = new Map(
+              (products ?? []).map((p: any) => [p.id, p])
+            );
+
+            const shipmentItems = orderItems.flatMap((item) => {
+              const product = productMap.get(item.productId) as any;
+              return Array.from({ length: item.qty }, () => ({
+                weight: product?.weight_grams ?? DEFAULT_WEIGHT_GRAMS,
+                height: product?.height_cm ?? DEFAULT_HEIGHT_CM,
+                width: product?.width_cm ?? DEFAULT_WIDTH_CM,
+                length: product?.length_cm ?? DEFAULT_LENGTH_CM,
+                description: item.name,
+              }));
+            });
+
+            const result = await createShipment({
+              logisticCode: option.logisticCode,
+              serviceCode: option.serviceCode,
+              carrierId: option.carrierId,
+              declaredValue:
+                fullOrder.total - (fullOrder.shipping_cost ?? 0),
+              externalId: orderId.replace(/-/g, "").substring(0, 30),
+              destination: {
+                name: customer.name,
+                street: customer.street,
+                street_number: customer.street_number,
+                document: customer.document,
+                email: customer.email,
+                phone: customer.phone ?? "",
+                state: customer.state,
+                city: customer.city,
+                zipcode: customer.zip,
+              },
+              items: shipmentItems,
+            });
+
+            await supabase
+              .from("orders")
+              .update({
+                zipnova_shipment_id: result.shipmentId,
+                tracking_code: result.trackingCode,
+                shipping_status: "created",
+              })
+              .eq("id", orderId);
+          } catch (shipErr) {
+            console.error("Zipnova shipment creation failed:", shipErr);
+            // Don't fail the webhook — payment is already confirmed
+          }
+        }
       }
     } else if (status === "rejected" || status === "cancelled") {
       await supabase

@@ -47,3 +47,15 @@ create policy "read variants" on product_variants for select using (true);
 -- Migration for existing installs
 alter table products add column if not exists gender text;
 alter table product_variants add column if not exists image_url text;
+
+-- Zipnova shipping integration
+alter table products add column if not exists weight_grams int not null default 500;
+alter table products add column if not exists height_cm int not null default 10;
+alter table products add column if not exists width_cm int not null default 30;
+alter table products add column if not exists length_cm int not null default 40;
+
+alter table orders add column if not exists shipping_option jsonb;
+alter table orders add column if not exists shipping_cost numeric(10,2) default 0;
+alter table orders add column if not exists zipnova_shipment_id text;
+alter table orders add column if not exists tracking_code text;
+alter table orders add column if not exists shipping_status text;

@@ -147,7 +147,7 @@ export default function ProductGrid({ products }: { products: Product[] }) {
   return (
     <>
       <div
-        className="grid grid-cols-2 gap-x-2 gap-y-5 sm:gap-x-4 sm:gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+        className="grid grid-cols-2 gap-x-3 gap-y-2 sm:gap-x-5 sm:gap-y-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
@@ -188,7 +188,7 @@ export default function ProductGrid({ products }: { products: Product[] }) {
                 draggable={false}
                 className="block"
               >
-                <h3 className="mb-1 line-clamp-2 flex h-10 items-center justify-center text-center text-base font-bold leading-tight sm:h-12 sm:text-lg">
+                <h3 className="mb-1 line-clamp-2 flex h-9 items-center justify-center text-center text-sm font-bold leading-tight sm:h-12 sm:text-lg">
                   {p.name}
                 </h3>
                 <div className="relative aspect-square overflow-hidden bg-white">
@@ -258,7 +258,7 @@ export default function ProductGrid({ products }: { products: Product[] }) {
                     qty: 1,
                   });
                 }}
-                className="mt-1 w-full bg-tinta py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-celeste-600 active:scale-95"
+                className="mt-1 w-full bg-tinta py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-celeste-600 active:scale-95"
               >
                 Añadir al carrito
               </button>

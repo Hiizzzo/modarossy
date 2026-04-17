@@ -23,7 +23,7 @@ export default async function TiendaPage({
     : all;
 
   return (
-    <div className="container-edge pb-0 pt-5 sm:pt-10">
+    <div className="container-edge pb-0 pt-2 sm:pt-4">
       {term && (
         <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-tinta/60">
           Resultados para “{q}” · {products.length}

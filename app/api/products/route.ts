@@ -93,7 +93,6 @@ export async function POST(req: Request) {
       size: v.size || null,
       color: v.color || null,
       stock: v.stock,
-      image_url: v.photoKey ? urls.get(v.photoKey) ?? null : coverUrl,
     }));
 
     const [uploadsRes, varRes] = await Promise.all([

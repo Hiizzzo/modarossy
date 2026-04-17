@@ -16,7 +16,7 @@ export default function AdminLogin() {
     setError(null);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) setError(error.message);
-    else window.location.href = "/admin";
+    else window.location.href = "/tienda";
   };
 
   return (

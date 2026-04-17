@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { preference } from "@/lib/mercadopago";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { CartItem } from "@/lib/cart-store";
+import type { ShippingOption } from "@/lib/shipping-types";
 
 type Body = {
   items: CartItem[];
@@ -9,10 +10,14 @@ type Body = {
     name: string;
     email: string;
     phone?: string;
-    address: string;
+    street: string;
+    street_number: string;
     city: string;
+    state: string;
     zip: string;
+    document: string;
   };
+  shippingOption?: ShippingOption;
 };
 
 export async function POST(req: Request) {
@@ -23,7 +28,9 @@ export async function POST(req: Request) {
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-    const total = body.items.reduce((t, i) => t + i.price * i.qty, 0);
+    const productTotal = body.items.reduce((t, i) => t + i.price * i.qty, 0);
+    const shippingCost = body.shippingOption?.price ?? 0;
+    const total = productTotal + shippingCost;
 
     let orderId: string | null = null;
     if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -50,6 +57,8 @@ export async function POST(req: Request) {
           total,
           customer: body.customer,
           items: body.items,
+          shipping_option: body.shippingOption ?? null,
+          shipping_cost: shippingCost,
         })
         .select("id")
         .single();
@@ -57,15 +66,27 @@ export async function POST(req: Request) {
       orderId = order.id;
     }
 
+    const mpItems = body.items.map((i) => ({
+      id: i.variantId,
+      title: `${i.name}${i.size ? ` · ${i.size}` : ""}`,
+      quantity: i.qty,
+      unit_price: i.price,
+      currency_id: "ARS" as const,
+    }));
+
+    if (shippingCost > 0 && body.shippingOption) {
+      mpItems.push({
+        id: "shipping",
+        title: `Envío - ${body.shippingOption.carrierName} (${body.shippingOption.serviceName})`,
+        quantity: 1,
+        unit_price: shippingCost,
+        currency_id: "ARS" as const,
+      });
+    }
+
     const pref = await preference.create({
       body: {
-        items: body.items.map((i) => ({
-          id: i.variantId,
-          title: `${i.name}${i.size ? ` · ${i.size}` : ""}`,
-          quantity: i.qty,
-          unit_price: i.price,
-          currency_id: "ARS",
-        })),
+        items: mpItems,
         external_reference: orderId ?? undefined,
         back_urls: {
           success: `${siteUrl}/checkout/exito`,

@@ -73,13 +73,14 @@ export default function ProductFormShared({
         });
       }
 
+      const fallbackImage = product.images?.[0] || null;
       const result: ColorGroup[] = [];
       for (const [color, data] of byColor.entries()) {
         result.push({
           key: `c${Date.now().toString(36)}-${nextGroupId++}`,
           colorSlug: color,
           photo: null,
-          photoPreview: data.imageUrl || null,
+          photoPreview: data.imageUrl || fallbackImage,
           sizes: data.sizes.length > 0 ? data.sizes : [{ size: "", stock: 1 }],
         });
       }
@@ -88,7 +89,7 @@ export default function ProductFormShared({
         key: `c${Date.now().toString(36)}-${nextGroupId++}`,
         colorSlug: COLORS[0].slug,
         photo: null,
-        photoPreview: null,
+        photoPreview: fallbackImage,
         sizes: [{ size: "", stock: 1 }],
       }];
     }
@@ -118,6 +119,15 @@ export default function ProductFormShared({
   const fileInputsRef = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (mode !== "edit" || !product) return;
+    const fallback = product.images?.[0];
+    if (!fallback) return;
+    setGroups((gs) =>
+      gs.map((g) => (!g.photo && !g.photoPreview ? { ...g, photoPreview: fallback } : g))
+    );
+  }, [mode, product]);
 
   useEffect(() => {
     if (mode === "create") {
@@ -319,6 +329,7 @@ export default function ProductFormShared({
           color: g.colorSlug,
           stock: s.stock,
           photoKey: g.key,
+          existingImageUrl: g.photo ? null : g.photoPreview,
         }))
       );
       fd.append("variants", JSON.stringify(variants));

@@ -44,7 +44,7 @@ export default function RootLayout({
     <html lang="es" className={barlow.variable}>
       <body className="min-h-screen bg-white font-sans text-tinta antialiased">
         <Navbar />
-        <main className="pb-14 pt-12 sm:pt-16">
+        <main className="pb-[70px] pt-16 sm:pt-20">
           <PageAnimator>{children}</PageAnimator>
         </main>
         <AnnouncementBar />

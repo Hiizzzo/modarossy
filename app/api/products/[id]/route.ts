@@ -73,12 +73,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       await supabase.from("product_variants").delete().eq("product_id", params.id);
 
       // Crear todas las variantes de nuevo
-      const variantRows = variants.map((v: { size: string; color: string; stock: number; photoKey: string }) => ({
+      const variantRows = variants.map((v: { size: string; color: string; stock: number }) => ({
         product_id: params.id,
         size: v.size || null,
         color: v.color || null,
         stock: v.stock,
-        image_url: photoUrls.get(v.photoKey) || null,
       }));
 
       if (variantRows.length > 0) {
@@ -100,6 +99,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     return NextResponse.json({ ok: true });
   } catch (e) {
+    console.error("[PATCH /api/products/[id]] error:", e);
     const msg = e instanceof Error ? e.message : "Error";
     return NextResponse.json({ error: msg }, { status: 500 });
   }

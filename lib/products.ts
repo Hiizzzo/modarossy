@@ -20,6 +20,10 @@ export type Product = {
   images: string[];
   active: boolean;
   variants: Variant[];
+  weight_grams: number;
+  height_cm: number;
+  width_cm: number;
+  length_cm: number;
 };
 
 function hasSupabase() {
