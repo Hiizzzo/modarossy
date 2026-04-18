@@ -11,11 +11,16 @@ import {
   DEFAULT_LENGTH_CM,
 } from "@/lib/zipnova";
 
+// TODO: QUITAR cuando activemos cobro de envio real.
+// Se cotiza + se guarda el carrier elegido en la DB,
+// pero al cliente se le cobra 0 por envio (promo/testing).
+const FREE_SHIPPING = true;
+
 type Body = {
   items: CartItem[];
   customer: {
     name: string;
-    email: string;
+    instagram: string;
     phone?: string;
     street: string;
     street_number: string;
@@ -121,7 +126,7 @@ export async function POST(req: Request) {
           );
         }
         validatedShippingOption = match;
-        shippingCost = match.price;
+        shippingCost = FREE_SHIPPING ? 0 : match.price;
       } catch (e) {
         console.error("Shipping re-quote failed:", e);
         return NextResponse.json(

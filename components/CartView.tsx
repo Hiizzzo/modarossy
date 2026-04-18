@@ -7,11 +7,16 @@ import { formatARS } from "@/lib/format";
 import { PROVINCES } from "@/lib/provinces";
 import type { ShippingOption } from "@/lib/shipping-types";
 
+// TODO: QUITAR cuando activemos cobro de envio real.
+// Se cotiza contra Zipnova (se elige carrier + se guarda en DB),
+// pero no se le cobra el envio al cliente.
+const FREE_SHIPPING = true;
+
 export default function CartView() {
   const { items, remove, setQty, total } = useCart();
   const [form, setForm] = useState({
     name: "",
-    email: "",
+    instagram: "",
     phone: "",
     street: "",
     street_number: "",
@@ -29,7 +34,7 @@ export default function CartView() {
   const [quoteLoading, setQuoteLoading] = useState(false);
 
   const canQuote =
-    form.name && form.email && form.street && form.street_number && form.city && form.state && form.zip && form.document;
+    form.name && form.instagram && form.street && form.street_number && form.city && form.state && form.zip && form.document;
 
   const onQuote = async () => {
     setQuoteLoading(true);
@@ -45,8 +50,13 @@ export default function CartView() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error cotizando envío");
-      setShippingOptions(data.options);
-      setSelectedOption(null);
+      const options = (data.options ?? []) as ShippingOption[];
+      if (options.length === 0) {
+        throw new Error("No se encontraron opciones de envío para esta dirección.");
+      }
+      const cheapest = [...options].sort((a, b) => a.price - b.price)[0];
+      setShippingOptions(options);
+      setSelectedOption(cheapest);
       setStep("options");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
@@ -107,7 +117,8 @@ export default function CartView() {
 
   /* ── Step: Opciones de envío ── */
   if (step === "options") {
-    const shippingCost = selectedOption?.price ?? 0;
+    const quotedShippingCost = selectedOption?.price ?? 0;
+    const shippingCost = FREE_SHIPPING ? 0 : quotedShippingCost;
     const grandTotal = total() + shippingCost;
 
     return (
@@ -123,64 +134,36 @@ export default function CartView() {
               <path d="M15 6l-6 6 6 6" />
             </svg>
           </button>
-          <h1 className="text-xl font-bold tracking-tight">Opciones de envío</h1>
+          <h1 className="text-xl font-bold tracking-tight">Envío</h1>
         </div>
 
-        {shippingOptions.length === 0 ? (
-          <p className="py-8 text-center text-sm text-tinta/60">
-            No se encontraron opciones de envío para esta dirección.
-          </p>
-        ) : (
-          <ul className="space-y-1.5 pt-1">
-            {shippingOptions.map((opt) => {
-              const isSelected = selectedOption?.id === opt.id;
-              return (
-                <li key={opt.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedOption(opt)}
-                    className={`flex w-full items-center gap-3 rounded-2xl border-2 bg-white p-3 text-left transition ${
-                      isSelected
-                        ? "border-celeste-500 ring-1 ring-celeste-500"
-                        : "border-transparent hover:border-tinta/10"
-                    }`}
-                  >
-                    {opt.carrierLogo && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={opt.carrierLogo}
-                        alt={opt.carrierName}
-                        className="h-8 w-8 shrink-0 rounded object-contain"
-                      />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold text-tinta">
-                          {opt.carrierName}
-                        </span>
-                        {opt.tags.includes("cheapest") && (
-                          <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
-                            Más barato
-                          </span>
-                        )}
-                        {opt.tags.includes("fastest") && (
-                          <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
-                            Más rápido
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-tinta/60">
-                        {opt.serviceName} · {opt.deliveryMin}-{opt.deliveryMax} días hábiles
-                      </div>
-                    </div>
-                    <span className="shrink-0 text-sm font-bold text-tinta">
-                      {formatARS(opt.price)}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+        {selectedOption && (
+          <div className="flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left">
+            {selectedOption.carrierLogo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={selectedOption.carrierLogo}
+                alt={selectedOption.carrierName}
+                className="h-8 w-8 shrink-0 rounded object-contain"
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-bold text-tinta">
+                  {selectedOption.carrierName}
+                </span>
+                <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                  Más barato
+                </span>
+              </div>
+              <div className="text-xs text-tinta/60">
+                {selectedOption.serviceName} · {selectedOption.deliveryMin}-{selectedOption.deliveryMax} días hábiles
+              </div>
+            </div>
+            <span className="shrink-0 text-sm font-bold text-tinta">
+              {FREE_SHIPPING ? "Gratis" : formatARS(selectedOption.price)}
+            </span>
+          </div>
         )}
 
         {error && <p className="text-center text-xs text-red-500">{error}</p>}
@@ -190,12 +173,17 @@ export default function CartView() {
             <span>Productos</span>
             <span>{formatARS(total())}</span>
           </div>
-          {shippingCost > 0 && (
+          {shippingCost > 0 ? (
             <div className="flex items-center justify-between text-xs text-tinta/60">
               <span>Envío</span>
               <span>{formatARS(shippingCost)}</span>
             </div>
-          )}
+          ) : FREE_SHIPPING && selectedOption ? (
+            <div className="flex items-center justify-between text-xs text-green-700">
+              <span>Envío</span>
+              <span className="font-semibold">Gratis</span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between text-sm pt-1">
             <span className="font-semibold uppercase tracking-wider text-tinta/70">Total</span>
             <span className="text-base font-bold text-tinta">{formatARS(grandTotal)}</span>
@@ -239,9 +227,9 @@ export default function CartView() {
             className="col-span-2 h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
           />
           <input
-            placeholder="Email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            placeholder="Instagram (@usuario)"
+            value={form.instagram}
+            onChange={(e) => setForm({ ...form, instagram: e.target.value })}
             className="col-span-2 h-9 rounded-full border border-tinta/25 bg-white px-3 text-xs text-tinta placeholder:text-tinta/50 focus:border-celeste-500 focus:outline-none"
           />
           <input
