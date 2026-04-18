@@ -8,6 +8,8 @@ import {
   DEFAULT_WIDTH_CM,
   DEFAULT_LENGTH_CM,
 } from "@/lib/zipnova";
+import { notifyNewOrder } from "@/lib/telegram";
+import { sendOrderReceipt } from "@/lib/email";
 import type { ShippingOption } from "@/lib/shipping-types";
 import type { CartItem } from "@/lib/cart-store";
 
@@ -63,12 +65,28 @@ export async function POST(req: Request) {
           })
           .eq("id", orderId);
 
-        // Create Zipnova shipment if shipping was selected
+        // Fetch full order for notifications + shipment
         const { data: fullOrder } = await supabase
           .from("orders")
           .select("*")
           .eq("id", orderId)
           .maybeSingle();
+
+        if (fullOrder) {
+          const notifPayload = {
+            id: fullOrder.id,
+            total: fullOrder.total,
+            customer: fullOrder.customer,
+            items: fullOrder.items,
+            shipping_option: fullOrder.shipping_option,
+            shipping_cost: fullOrder.shipping_cost,
+            mp_payment_id: String(paymentId),
+          };
+          await Promise.all([
+            notifyNewOrder(notifPayload),
+            sendOrderReceipt(notifPayload),
+          ]);
+        }
 
         if (
           fullOrder?.shipping_option &&
@@ -80,7 +98,8 @@ export async function POST(req: Request) {
             const option = fullOrder.shipping_option as ShippingOption;
             const customer = fullOrder.customer as {
               name: string;
-              email: string;
+              email?: string;
+              instagram?: string;
               phone?: string;
               street: string;
               street_number: string;
@@ -127,7 +146,7 @@ export async function POST(req: Request) {
                 street: customer.street,
                 street_number: customer.street_number,
                 document: customer.document,
-                email: customer.email,
+                email: customer.email ?? "noreply@modarossy.com",
                 phone: customer.phone ?? "",
                 state: customer.state,
                 city: customer.city,
