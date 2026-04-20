@@ -28,10 +28,16 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuGender, setMenuGender] = useState<"hombres" | "mujeres" | null>(null);
+  const [menuAnimKey, setMenuAnimKey] = useState(0);
 
   useEffect(() => {
     if (!open) setMenuGender(null);
+    else setMenuAnimKey((k) => k + 1);
   }, [open]);
+
+  useEffect(() => {
+    if (open) setMenuAnimKey((k) => k + 1);
+  }, [menuGender, open]);
 
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,18 +160,6 @@ export default function Navbar() {
             modarossy
           </Link>
 
-          <div className="hidden items-center gap-10 md:flex">
-            {categories.map((c) => (
-              <Link
-                key={c.slug || "all"}
-                href={c.slug ? `/tienda?cat=${c.slug}` : "/tienda"}
-                className="text-[11px] font-semibold uppercase tracking-[0.14em] text-tinta/80 transition hover:text-celeste-600"
-              >
-                {c.label}
-              </Link>
-            ))}
-          </div>
-
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -197,7 +191,7 @@ export default function Navbar() {
             <button
               aria-label="Menú"
               onClick={() => setOpen((v) => !v)}
-              className={`flex h-9 w-9 items-center justify-center transition-all duration-300 active:scale-90 md:hidden ${
+              className={`flex h-9 w-9 items-center justify-center transition-all duration-300 active:scale-90 ${
                 open ? "text-celeste-500" : "text-tinta hover:text-celeste-500"
               }`}
             >
@@ -253,19 +247,27 @@ export default function Navbar() {
           </form>
         </div>
 
-        {/* Mobile menu */}
+        {/* Side menu */}
         <div
-          className={`overflow-hidden bg-white transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden ${
-            open ? "max-h-[80vh]" : "max-h-0"
+          onClick={() => setOpen(false)}
+          className={`fixed inset-0 top-14 z-30 bg-black/30 transition-opacity duration-300 sm:top-16 ${
+            open ? "opacity-100" : "pointer-events-none opacity-0"
           }`}
+        />
+        <div
+          className={`fixed right-0 top-14 z-40 w-72 max-w-[85vw] overflow-y-auto bg-white shadow-xl transition-transform duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] sm:top-16 ${
+            open ? "translate-x-0" : "translate-x-full"
+          }`}
+          style={{ maxHeight: "calc(100vh - 3.5rem)" }}
         >
-          <div className="container-edge flex flex-col py-2">
+          <div key={menuAnimKey} className="flex flex-col px-5 py-2">
             {menuGender === null ? (
               <>
                 <button
                   type="button"
                   onClick={() => setMenuGender("hombres")}
-                  className="flex items-center justify-between border-b border-tinta/5 py-4 text-left text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
+                  style={{ animationDelay: open ? "80ms" : "0ms" }}
+                  className="menu-item-in flex items-center justify-between border-b border-tinta/5 py-4 text-left text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
                 >
                   <span>Hombres</span>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
@@ -275,7 +277,8 @@ export default function Navbar() {
                 <button
                   type="button"
                   onClick={() => setMenuGender("mujeres")}
-                  className="flex items-center justify-between border-b border-tinta/5 py-4 text-left text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
+                  style={{ animationDelay: open ? "160ms" : "0ms" }}
+                  className="menu-item-in flex items-center justify-between border-b border-tinta/5 py-4 text-left text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
                 >
                   <span>Mujeres</span>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
@@ -295,18 +298,22 @@ export default function Navbar() {
                   </svg>
                   <span>{menuGender === "hombres" ? "Hombres" : "Mujeres"}</span>
                 </button>
-                {categories
-                  .filter((c) => c.slug)
-                  .map((c) => (
-                    <Link
-                      key={c.slug}
-                      href={`/tienda?cat=${c.slug}&gender=${menuGender}`}
-                      onClick={() => setOpen(false)}
-                      className="border-b border-tinta/5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80"
-                    >
-                      {c.label}
-                    </Link>
-                  ))}
+                <div className="grid grid-cols-2 gap-x-3 py-2">
+                  {categories
+                    .filter((c) => c.slug)
+                    .filter((c) => !(menuGender === "hombres" && c.slug === "carteras"))
+                    .map((c, i) => (
+                      <Link
+                        key={c.slug}
+                        href={`/tienda?cat=${c.slug}&gender=${menuGender}`}
+                        onClick={() => setOpen(false)}
+                        style={{ animationDelay: `${60 + i * 45}ms` }}
+                        className="menu-item-in border-b border-tinta/5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-tinta/80 transition-colors hover:text-celeste-600"
+                      >
+                        {c.label}
+                      </Link>
+                    ))}
+                </div>
               </>
             )}
             {isDev && (

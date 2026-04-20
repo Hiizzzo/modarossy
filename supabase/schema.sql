@@ -59,3 +59,7 @@ alter table orders add column if not exists shipping_cost numeric(10,2) default 
 alter table orders add column if not exists zipnova_shipment_id text;
 alter table orders add column if not exists tracking_code text;
 alter table orders add column if not exists shipping_status text;
+
+-- Dispatch workflow
+alter table orders add column if not exists dispatched_at timestamptz;
+alter table orders add column if not exists delivered_at timestamptz;

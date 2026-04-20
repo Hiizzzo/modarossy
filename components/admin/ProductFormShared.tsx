@@ -7,13 +7,26 @@ import Cropper from "react-easy-crop";
 import { COLORS, colorBySlug } from "@/lib/colors";
 import type { Product } from "@/lib/products";
 
-const CATEGORIES = ["camperas", "carteras", "zapatillas", "mochilas"];
+const CATEGORIES = [
+  "camperas",
+  "buzos",
+  "remeras",
+  "pantalones",
+  "zapatillas",
+  "mochilas",
+  "carteras",
+  "accesorios",
+];
 
 const SIZES_BY_CATEGORY: Record<string, string[]> = {
   zapatillas: ["35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46"],
   camperas: ["XS", "S", "M", "L", "XL", "XXL", "XXXL"],
+  buzos: ["XS", "S", "M", "L", "XL", "XXL", "XXXL"],
+  remeras: ["XS", "S", "M", "L", "XL", "XXL", "XXXL"],
+  pantalones: ["XS", "S", "M", "L", "XL", "XXL", "XXXL"],
   carteras: ["Única"],
   mochilas: ["Única"],
+  accesorios: ["Única"],
 };
 
 type SizeStock = { size: string; stock: number };
@@ -253,34 +266,10 @@ export default function ProductFormShared({
       { type: "image/jpeg" }
     );
     setCroppingKey(null);
-    setLoading("Eliminando fondo...");
-    try {
-      const fd = new FormData();
-      fd.append("image", cropped);
-      const res = await fetch("/api/bg-remove", { method: "POST", body: fd });
-      if (res.ok) {
-        const out = await res.blob();
-        const noBg = new File(
-          [out],
-          cropped.name.replace(/\.[^.]+$/, "") + ".jpg",
-          { type: "image/jpeg" }
-        );
-        updateGroup(key, {
-          photo: noBg,
-          photoPreview: URL.createObjectURL(noBg),
-        });
-      } else {
-        updateGroup(key, {
-          photo: cropped,
-          photoPreview: URL.createObjectURL(cropped),
-        });
-      }
-    } catch {
-      updateGroup(key, {
-        photo: cropped,
-        photoPreview: URL.createObjectURL(cropped),
-      });
-    }
+    updateGroup(key, {
+      photo: cropped,
+      photoPreview: URL.createObjectURL(cropped),
+    });
     setLoading(null);
   };
 

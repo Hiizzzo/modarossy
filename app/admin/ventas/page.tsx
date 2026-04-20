@@ -2,6 +2,7 @@ import Link from "next/link";
 import { unstable_noStore as noStore } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/server";
 import { formatARS } from "@/lib/format";
+import DispatchActions from "@/components/admin/DispatchActions";
 
 export const dynamic = "force-dynamic";
 
@@ -13,14 +14,30 @@ type OrderItem = {
   color?: string;
 };
 
+type Customer = {
+  name?: string;
+  email?: string;
+  instagram?: string;
+  phone?: string;
+  street?: string;
+  street_number?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+} | null;
+
 type Order = {
   id: string;
   status: string;
   total: number;
-  customer: { name?: string; email?: string; phone?: string; address?: string } | null;
+  customer: Customer;
   items: OrderItem[] | null;
   created_at: string;
   mp_payment_id: string | null;
+  dispatched_at: string | null;
+  delivered_at: string | null;
+  tracking_code: string | null;
+  shipping_option: { carrierName?: string; serviceName?: string } | null;
 };
 
 async function getOrders(): Promise<Order[]> {
@@ -38,20 +55,127 @@ async function getOrders(): Promise<Order[]> {
   return (data as Order[] | null) ?? [];
 }
 
-const statusColor: Record<string, string> = {
-  approved: "bg-green-100 text-green-700",
-  paid: "bg-green-100 text-green-700",
-  pending: "bg-yellow-100 text-yellow-700",
-  rejected: "bg-red-100 text-red-600",
-  cancelled: "bg-red-100 text-red-600",
-};
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function customerContact(c: Customer): string {
+  return c?.instagram ?? c?.email ?? "—";
+}
+
+function OrderCard({
+  order,
+  action,
+}: {
+  order: Order;
+  action?: "dispatch" | "deliver" | null;
+}) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  const nItems = items.reduce((s, i) => s + (i.qty ?? 0), 0);
+  const address = order.customer
+    ? [
+        order.customer.street,
+        order.customer.street_number,
+        order.customer.city,
+        order.customer.state,
+        order.customer.zip ? `(${order.customer.zip})` : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "";
+
+  const isDelivered = !!order.delivered_at;
+
+  return (
+    <li
+      className={`rounded-2xl p-3 ring-1 ${
+        isDelivered ? "bg-green-50 ring-green-200" : "bg-white ring-celeste-100"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">
+            {order.customer?.name ?? "Sin nombre"}
+          </p>
+          <p className="truncate text-[11px] text-tinta/60">
+            {customerContact(order.customer)} · {formatDate(order.created_at)}
+          </p>
+        </div>
+        {isDelivered && (
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500 text-xs text-white">
+            ✓
+          </span>
+        )}
+      </div>
+
+      {address && (
+        <p className="mt-1 text-[11px] text-tinta/60">{address}</p>
+      )}
+
+      <ul className="mt-2 space-y-0.5 text-[11px] text-tinta/70">
+        {items.map((i, idx) => (
+          <li key={idx} className="flex justify-between gap-2">
+            <span className="truncate">
+              {i.qty}× {i.name}
+              {i.size ? ` · ${i.size}` : ""}
+              {i.color ? ` · ${i.color}` : ""}
+            </span>
+            <span className="font-semibold text-tinta">
+              {formatARS((i.price ?? 0) * (i.qty ?? 0))}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {order.shipping_option && (
+        <p className="mt-1.5 text-[10px] text-tinta/60">
+          {order.shipping_option.carrierName} ·{" "}
+          {order.shipping_option.serviceName}
+          {order.tracking_code ? ` · ${order.tracking_code}` : ""}
+        </p>
+      )}
+
+      <div className="mt-2 flex items-center justify-between border-t border-celeste-100 pt-2">
+        <span className="text-[11px] text-tinta/60">
+          {nItems} {nItems === 1 ? "item" : "items"}
+        </span>
+        <span className="text-base font-bold">{formatARS(order.total)}</span>
+      </div>
+
+      {order.dispatched_at && !isDelivered && (
+        <p className="mt-1 text-[10px] text-tinta/50">
+          Despachado: {formatDate(order.dispatched_at)}
+        </p>
+      )}
+      {order.delivered_at && (
+        <p className="mt-1 text-[10px] text-green-700">
+          Entregado: {formatDate(order.delivered_at)}
+        </p>
+      )}
+
+      {action && <DispatchActions orderId={order.id} action={action} />}
+    </li>
+  );
+}
 
 export default async function VentasPage() {
   const allOrders = await getOrders();
-  const orders = allOrders.filter((o) => o.status !== "pending");
-  const paid = orders.filter(
+  const paid = allOrders.filter(
     (o) => o.status === "approved" || o.status === "paid"
   );
+
+  const pendientesDespacho = paid.filter((o) => !o.dispatched_at);
+  const despachadosEnCamino = paid.filter(
+    (o) => o.dispatched_at && !o.delivered_at
+  );
+  const entregados = paid.filter((o) => o.delivered_at);
+
   const total = paid.reduce((s, o) => s + Number(o.total ?? 0), 0);
   const unitsSold = paid.reduce(
     (s, o) =>
@@ -129,72 +253,48 @@ export default async function VentasPage() {
         </div>
       )}
 
-      <p className="pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-tinta/60">
-        Historial
-      </p>
+      <div className="flex items-center justify-between pt-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-tinta/60">
+          📦 Pendientes de despacho
+        </p>
+        <span className="rounded-full bg-tinta px-2 py-0.5 text-[10px] font-bold text-white">
+          {pendientesDespacho.length}
+        </span>
+      </div>
 
-      {orders.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-tinta/20 py-16 text-center text-sm text-tinta/60">
-          Todavía no hay ventas.
+      {pendientesDespacho.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-tinta/20 py-10 text-center text-xs text-tinta/60">
+          No hay pedidos pendientes de despacho.
         </div>
       ) : (
         <ul className="space-y-3">
-          {orders.map((o) => {
-            const date = new Date(o.created_at);
-            const items = Array.isArray(o.items) ? o.items : [];
-            const nItems = items.reduce((s, i) => s + (i.qty ?? 0), 0);
-            return (
-              <li
-                key={o.id}
-                className="rounded-2xl bg-white p-3 ring-1 ring-celeste-100"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">
-                      {o.customer?.name ?? "Sin nombre"}
-                    </p>
-                    <p className="truncate text-[11px] text-tinta/60">
-                      {date.toLocaleString("es-AR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                  </div>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                      statusColor[o.status] ?? "bg-tinta/10 text-tinta/70"
-                    }`}
-                  >
-                    {o.status}
-                  </span>
-                </div>
+          {pendientesDespacho.map((o) => (
+            <OrderCard key={o.id} order={o} action="dispatch" />
+          ))}
+        </ul>
+      )}
 
-                <ul className="mt-2 space-y-0.5 text-[11px] text-tinta/70">
-                  {items.map((i, idx) => (
-                    <li key={idx} className="flex justify-between gap-2">
-                      <span className="truncate">
-                        {i.qty}× {i.name}
-                        {i.size ? ` · ${i.size}` : ""}
-                      </span>
-                      <span className="font-semibold text-tinta">
-                        {formatARS((i.price ?? 0) * (i.qty ?? 0))}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+      <div className="flex items-center justify-between pt-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-tinta/60">
+          🚚 Despachados
+        </p>
+        <span className="rounded-full bg-celeste-500 px-2 py-0.5 text-[10px] font-bold text-white">
+          {despachadosEnCamino.length + entregados.length}
+        </span>
+      </div>
 
-                <div className="mt-2 flex items-center justify-between border-t border-celeste-100 pt-2">
-                  <span className="text-[11px] text-tinta/60">
-                    {nItems} {nItems === 1 ? "item" : "items"}
-                  </span>
-                  <span className="text-base font-bold">{formatARS(o.total)}</span>
-                </div>
-              </li>
-            );
-          })}
+      {despachadosEnCamino.length === 0 && entregados.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-tinta/20 py-10 text-center text-xs text-tinta/60">
+          Todavía no despachaste ningún pedido.
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {despachadosEnCamino.map((o) => (
+            <OrderCard key={o.id} order={o} action="deliver" />
+          ))}
+          {entregados.map((o) => (
+            <OrderCard key={o.id} order={o} action={null} />
+          ))}
         </ul>
       )}
     </div>

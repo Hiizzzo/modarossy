@@ -59,8 +59,18 @@ export default function Footer() {
               </Link>
             </li>
             <li>
-              <Link href="/tienda?cat=carteras" className="hover:text-celeste-600">
-                Carteras
+              <Link href="/tienda?cat=buzos" className="hover:text-celeste-600">
+                Buzos
+              </Link>
+            </li>
+            <li>
+              <Link href="/tienda?cat=remeras" className="hover:text-celeste-600">
+                Remeras
+              </Link>
+            </li>
+            <li>
+              <Link href="/tienda?cat=pantalones" className="hover:text-celeste-600">
+                Pantalones
               </Link>
             </li>
             <li>
@@ -71,6 +81,16 @@ export default function Footer() {
             <li>
               <Link href="/tienda?cat=mochilas" className="hover:text-celeste-600">
                 Mochilas
+              </Link>
+            </li>
+            <li>
+              <Link href="/tienda?cat=carteras" className="hover:text-celeste-600">
+                Carteras
+              </Link>
+            </li>
+            <li>
+              <Link href="/tienda?cat=accesorios" className="hover:text-celeste-600">
+                Accesorios
               </Link>
             </li>
           </ul>

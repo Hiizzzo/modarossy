@@ -7,11 +7,6 @@ import { formatARS } from "@/lib/format";
 import { PROVINCES } from "@/lib/provinces";
 import type { ShippingOption } from "@/lib/shipping-types";
 
-// TODO: QUITAR cuando activemos cobro de envio real.
-// Se cotiza contra Zipnova (se elige carrier + se guarda en DB),
-// pero no se le cobra el envio al cliente.
-const FREE_SHIPPING = true;
-
 export default function CartView() {
   const { items, remove, setQty, total } = useCart();
   const [form, setForm] = useState({
@@ -117,8 +112,7 @@ export default function CartView() {
 
   /* ── Step: Opciones de envío ── */
   if (step === "options") {
-    const quotedShippingCost = selectedOption?.price ?? 0;
-    const shippingCost = FREE_SHIPPING ? 0 : quotedShippingCost;
+    const shippingCost = selectedOption?.price ?? 0;
     const grandTotal = total() + shippingCost;
 
     return (
@@ -161,7 +155,7 @@ export default function CartView() {
               </div>
             </div>
             <span className="shrink-0 text-sm font-bold text-tinta">
-              {FREE_SHIPPING ? "Gratis" : formatARS(selectedOption.price)}
+              {formatARS(selectedOption.price)}
             </span>
           </div>
         )}
@@ -173,17 +167,12 @@ export default function CartView() {
             <span>Productos</span>
             <span>{formatARS(total())}</span>
           </div>
-          {shippingCost > 0 ? (
+          {shippingCost > 0 && (
             <div className="flex items-center justify-between text-xs text-tinta/60">
               <span>Envío</span>
               <span>{formatARS(shippingCost)}</span>
             </div>
-          ) : FREE_SHIPPING && selectedOption ? (
-            <div className="flex items-center justify-between text-xs text-green-700">
-              <span>Envío</span>
-              <span className="font-semibold">Gratis</span>
-            </div>
-          ) : null}
+          )}
           <div className="flex items-center justify-between text-sm pt-1">
             <span className="font-semibold uppercase tracking-wider text-tinta/70">Total</span>
             <span className="text-base font-bold text-tinta">{formatARS(grandTotal)}</span>
